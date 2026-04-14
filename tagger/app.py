@@ -142,9 +142,12 @@ def open_folder(path_str: str) -> bool:
     return True
 
 
-# Restore folder from URL on fresh page load
-if st.session_state.folder is None and "folder" in st.query_params:
-    open_folder(st.query_params["folder"])
+# Restore folder from URL on fresh page load, or default to cwd
+if st.session_state.folder is None:
+    if "folder" in st.query_params:
+        open_folder(st.query_params["folder"])
+    else:
+        open_folder(str(Path.cwd()))
 
 # ---------------------------------------------------------------------------
 # Keyboard shortcut injection (Ctrl+J = next, Ctrl+K = prev)
