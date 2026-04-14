@@ -34,3 +34,7 @@ env/
 .vscode/
 *.swp
 *.swo
+
+.direnv/
+.claude/
+*TEMP*

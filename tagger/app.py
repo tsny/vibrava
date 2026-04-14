@@ -35,6 +35,7 @@ COMMON_TAGS = [
     "food", "grumpy", "surprised", "sleeping", "chaos",
     "judging", "cute", "angry", "sad", "happy", "derp",
     "attack", "scared", "confused", "smug",
+    "meme", "smirk", "smile", "cry",
 ]
 
 # ---------------------------------------------------------------------------
@@ -284,6 +285,15 @@ with gallery_tab:
                 if st.form_submit_button("+ Add", use_container_width=True) and new_tag.strip():
                     add_tag(new_tag.strip().lower())
                     st.rerun()
+
+            st.components.v1.html("""
+<script>
+setTimeout(function() {
+    const input = window.parent.document.querySelector('input[placeholder="type and press Enter"]');
+    if (input) input.focus();
+}, 100);
+</script>
+""", height=0)
 
             st.divider()
 
