@@ -1,0 +1,16 @@
+[elevenlabs]
+api_key = ""           # or set ELEVENLABS_API_KEY env var
+default_voice_id = "Adam"
+model_id = "eleven_multilingual_v2"
+
+[library]
+path = "res"           # folder containing clip_index.json and images
+
+[cache]
+path = "cache"
+
+[output]
+path = "output"
+
+[compose]
+pause_duration = 0.3   # seconds of silence between segments

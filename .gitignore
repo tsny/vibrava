@@ -1,0 +1,36 @@
+res/*
+.envrc
+ARCH*.md
+
+# Config with secrets
+config.toml
+
+# Generated output
+output/
+
+# TTS cache
+cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo

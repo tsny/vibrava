@@ -1,0 +1,29 @@
+{
+  "mode": "cat_story",
+  "voice_id": "EXAVITQu4vr4xnSDxMaL",
+  "caption_style": "word",
+  "output_filename": "monday_cat.mp4",
+  "resolution": [1080, 1920],
+  "sentences": [
+    {
+      "id": "s1",
+      "text": "It was a Monday morning and the cat was not pleased.",
+      "sound_effect": null
+    },
+    {
+      "id": "s2",
+      "text": "The food bowl was completely empty.",
+      "sound_effect": null
+    },
+    {
+      "id": "s3",
+      "text": "So he knocked everything off the counter.",
+      "sound_effect": null
+    },
+    {
+      "id": "s4",
+      "text": "And then sat down looking very smug about it.",
+      "sound_effect": null
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+@dataclass
+class Sentence:
+    id: str
+    text: str
+    sound_effect: str | None = None
+
+
+@dataclass
+class CatStoryScript:
+    voice_id: str
+    output_filename: str
+    sentences: list[Sentence]
+    caption_style: str = "line"          # "word" | "line" | "none"
+    resolution: tuple[int, int] = field(default_factory=lambda: (1080, 1920))
+    pause_duration: float | None = None  # overrides config if set
+
+
+def parse(path: Path) -> CatStoryScript:
+    with open(path) as f:
+        data = json.load(f)
+
+    if data.get("mode") != "cat_story":
+        raise ValueError(f"Expected mode 'cat_story', got '{data.get('mode')}'")
+
+    sentences = [
+        Sentence(
+            id=s["id"],
+            text=s["text"],
+            sound_effect=s.get("sound_effect"),
+        )
+        for s in data["sentences"]
+    ]
+
+    res = data.get("resolution", [1080, 1920])
+    return CatStoryScript(
+        voice_id=data.get("voice_id", "21m00Tcm4TlvDq8ikWAM"),
+        output_filename=data.get("output_filename", "output.mp4"),
+        sentences=sentences,
+        caption_style=data.get("caption_style", "line"),
+        resolution=(res[0], res[1]),
+        pause_duration=data.get("pause_duration"),
+    )
