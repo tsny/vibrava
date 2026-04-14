@@ -36,6 +36,9 @@ COMMON_TAGS = [
     "judging", "cute", "angry", "sad", "happy", "derp",
     "attack", "scared", "confused", "smug",
     "meme", "smirk", "smile", "cry",
+    "eating", "napping", "hiding", "sneaking",
+    "thinking", "planning", "watching", "staring",
+    "excited", "guilty", "caught",
 ]
 
 # ---------------------------------------------------------------------------
@@ -315,7 +318,11 @@ setTimeout(function() {
 
     # ── Grid view ───────────────────────────────────────────────────────────
     else:
-        images = st.session_state.images
+        images = sorted(
+            st.session_state.images,
+            key=lambda f: bool((c := get_clip(f.name)) and c.get("tags")),
+        )
+        st.session_state.images = images
         if not images:
             st.info("No images found in this folder.")
         else:
