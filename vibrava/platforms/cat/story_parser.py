@@ -20,6 +20,7 @@ class CatStoryScript:
     pause_duration: float | None = None  # overrides config if set
     music: str | None = None             # filename in res/music/, e.g. "lofi.mp3"
     music_volume: float = 0.15
+    random_fallback: bool = False        # use a random image when no tag match found
 
 
 def parse(path: Path) -> CatStoryScript:
@@ -48,4 +49,5 @@ def parse(path: Path) -> CatStoryScript:
         pause_duration=data.get("pause_duration"),
         music=data.get("music"),
         music_volume=data.get("music_volume", 0.15),
+        random_fallback=data.get("random_fallback", False),
     )

@@ -6,6 +6,7 @@ from moviepy.editor import (
     CompositeAudioClip,
     CompositeVideoClip,
     ImageClip,
+    ImageSequenceClip,
     concatenate_videoclips,
 )
 import moviepy.audio.fx.all as afx
@@ -148,6 +149,35 @@ def _render_caption_word(
 
 
 # ---------------------------------------------------------------------------
+# GIF clip builder
+# ---------------------------------------------------------------------------
+
+def _make_gif_clip(gif_path: Path, width: int, height: int, duration: float):
+    """Load an animated GIF via PIL, resize frames, loop to fill duration."""
+    gif = Image.open(gif_path)
+    padding = 0.90
+
+    frames = []
+    frame_durations = []
+    try:
+        while True:
+            frame = gif.copy().convert("RGB")
+            scale = min(width / frame.width, height / frame.height) * padding
+            fw, fh = int(frame.width * scale), int(frame.height * scale)
+            frame = frame.resize((fw, fh), Image.LANCZOS)
+            bg = Image.new("RGB", (width, height), (0, 0, 0))
+            bg.paste(frame, ((width - fw) // 2, (height - fh) // 2))
+            frames.append(np.array(bg))
+            frame_durations.append(gif.info.get("duration", 100) / 1000.0)
+            gif.seek(gif.tell() + 1)
+    except EOFError:
+        pass
+
+    clip = ImageSequenceClip(frames, durations=frame_durations)
+    return clip.loop(duration=duration)
+
+
+# ---------------------------------------------------------------------------
 # Main build function
 # ---------------------------------------------------------------------------
 
@@ -173,11 +203,14 @@ def build(
 
         # Base video frame
         if img_path and img_path.exists():
-            frame = _make_background_frame(img_path, width, height)
+            if img_path.suffix.lower() == ".gif":
+                video_clip = _make_gif_clip(img_path, width, height, total_duration)
+            else:
+                frame = _make_background_frame(img_path, width, height)
+                video_clip = ImageClip(frame).set_duration(total_duration)
         else:
             frame = np.zeros((height, width, 3), dtype=np.uint8)
-
-        video_clip = ImageClip(frame).set_duration(total_duration)
+            video_clip = ImageClip(frame).set_duration(total_duration)
 
         # Audio — only for speech portion, silence fills the pause naturally
         audio_clip = AudioFileClip(str(seg.path)).subclip(0, seg.duration)

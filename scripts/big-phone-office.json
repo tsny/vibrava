@@ -1,0 +1,95 @@
+{
+  "mode": "cat_story",
+  "voice_id": "EXAVITQu4vr4xnSDxMaL",
+  "caption_style": "word",
+  "output_filename": "big-phone-office.mp4",
+  "resolution": [1080, 1920],
+  "random_fallback": true,
+  "sentences": [
+    {
+      "id": "s1",
+      "text": "Quiet Tuesday. Routine checkups.",
+      "sound_effect": null
+    },
+    {
+      "id": "s2",
+      "text": "I sat down in my chair.",
+      "sound_effect": null
+    },
+    {
+      "id": "s3",
+      "text": "Something was under it.",
+      "sound_effect": null
+    },
+    {
+      "id": "s4",
+      "text": "A phone.",
+      "sound_effect": null
+    },
+    {
+      "id": "s5",
+      "text": "Massive.",
+      "sound_effect": null
+    },
+    {
+      "id": "s6",
+      "text": "No charger. No case. No explanation.",
+      "sound_effect": null
+    },
+    {
+      "id": "s7",
+      "text": "I picked it up.",
+      "sound_effect": null
+    },
+    {
+      "id": "s8",
+      "text": "Called out to my nurse.",
+      "sound_effect": null
+    },
+    {
+      "id": "s9",
+      "text": "Nothing.",
+      "sound_effect": null
+    },
+    {
+      "id": "s10",
+      "text": "I walked out to the waiting room.",
+      "sound_effect": null
+    },
+    {
+      "id": "s11",
+      "text": "Twelve patients. Gone.",
+      "sound_effect": null
+    },
+    {
+      "id": "s12",
+      "text": "Receptionist. Gone.",
+      "sound_effect": null
+    },
+    {
+      "id": "s13",
+      "text": "Just the fish tank. Still running.",
+      "sound_effect": null
+    },
+    {
+      "id": "s14",
+      "text": "Me and the fish stared at each other.",
+      "sound_effect": null
+    },
+    {
+      "id": "s15",
+      "text": "I put the phone back under the chair.",
+      "sound_effect": null
+    },
+    {
+      "id": "s16",
+      "text": "Left at noon.",
+      "sound_effect": null
+    },
+    {
+      "id": "s17",
+      "text": "Best Tuesday of my career.",
+      "sound_effect": null
+    }
+  ]
+}

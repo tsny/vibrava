@@ -11,12 +11,15 @@ Write for short-form vertical video. The goal is to feel native to TikTok — no
 - Build momentum — start calm, escalate the situation, end with a smug or chaotic payoff.
 - Use relatable "POV" energy: the viewer should feel like they've lived this.
 
-**Structure (5–7 sentences):**
+**Structure (12–16 sentences, target 20+ seconds of spoken audio):**
 1. Set the scene / establish the vibe (calm)
 2. Introduce the problem or catalyst
-3. Escalate
-4. Peak chaos or punchline
-5. Cat wins / smug resolution
+3. Build tension — 2–3 beats of escalation
+4. False resolution or complication
+5. Peak chaos or punchline
+6. Cat wins / smug resolution — let it breathe, 2–3 closing lines
+
+Short sentences (4–6 words) run ~1.5–2s each. Aim for enough sentences that the total spoken time clears 20 seconds.
 
 **Avoid:**
 - Filler words: "basically", "kind of", "you know"

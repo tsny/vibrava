@@ -1,4 +1,6 @@
 import json
+import random
+from datetime import datetime
 from pathlib import Path
 
 from vibrava.audio.tts import generate as tts_generate
@@ -31,6 +33,9 @@ def _run_cat_story(script_path: Path, config: Config) -> None:
         audio_map[sentence.id] = seg
 
         img_path = matcher.match(sentence.text, index)
+        if img_path is None and script.random_fallback and index._clips:
+            entry = random.choice(index._clips)
+            img_path = index.resolve_path(entry)
         image_map[sentence.id] = img_path
         label = img_path.name if img_path else "no match"
         print(f"[match] {label}")
@@ -40,7 +45,9 @@ def _run_cat_story(script_path: Path, config: Config) -> None:
         if script.pause_duration is not None
         else config.pause_duration
     )
-    output_path = config.output_path / script.output_filename
+    ts = datetime.now().strftime("%m%d-%H%M")
+    stem = Path(script.output_filename).stem
+    output_path = config.output_path / f"{stem}_{ts}.mp4"
 
     music_path = None
     if script.music:
