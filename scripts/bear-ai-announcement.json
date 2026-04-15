@@ -2,109 +2,93 @@
   "mode": "cat_story",
   "voice_id": "EXAVITQu4vr4xnSDxMaL",
   "caption_style": "word",
-  "output_filename": "pushup-reminder.mp4",
-  "pause_jitter": 0.9,
+  "output_filename": "bear-ai-announcement.mp4",
   "resolution": [1080, 1920],
   "random_fallback": true,
   "sentences": [
     {
       "id": "s1",
-      "text": "Hey. Put the phone down.",
+      "text": "The guy who invented AI called a press conference.",
       "sound_effect": null
     },
     {
       "id": "s2",
-      "text": "Stand up.",
+      "text": "Everyone assumed it was about jobs.",
       "sound_effect": null
     },
     {
       "id": "s3",
-      "text": "You're doing twenty pushups.",
+      "text": "Or robots.",
       "sound_effect": null
     },
     {
       "id": "s4",
-      "text": "Right now.",
+      "text": "Or the end of humanity.",
       "sound_effect": null
     },
     {
       "id": "s5",
-      "text": "I'll wait.",
+      "text": "He walked up to the mic.",
       "sound_effect": null
     },
     {
       "id": "s6",
-      "text": "Everyone is safe.",
+      "text": "Cleared his throat.",
       "sound_effect": null
     },
     {
       "id": "s7",
-      "text": "This is not a threat.",
+      "text": "We have taught a bear to use AI.",
       "sound_effect": null
     },
     {
       "id": "s8",
-      "text": "It's a wellness check.",
+      "text": "Silence.",
       "sound_effect": null
     },
     {
       "id": "s9",
-      "text": "I've been watching you.",
+      "text": "Someone asked if the bear was okay with this.",
       "sound_effect": null
     },
     {
       "id": "s10",
-      "text": "For a while, actually.",
+      "text": "The bear had already filed three patents.",
       "sound_effect": null
     },
     {
       "id": "s11",
-      "text": "You've been sitting too long.",
+      "text": "It was not okay.",
       "sound_effect": null
     },
     {
       "id": "s12",
-      "text": "I'm somewhere in your house.",
+      "text": "It was thriving.",
       "sound_effect": null
     },
     {
       "id": "s13",
-      "text": "You won't find me.",
+      "text": "The bear gave a brief statement.",
       "sound_effect": null
     },
     {
       "id": "s14",
-      "text": "I've already checked.",
+      "text": "It said it was just getting started.",
       "sound_effect": null
     },
     {
       "id": "s15",
-      "text": "Keep going. Almost there.",
+      "text": "Nobody slept that night.",
       "sound_effect": null
     },
     {
       "id": "s16",
-      "text": "Twenty.",
+      "text": "The bear did.",
       "sound_effect": null
     },
     {
       "id": "s17",
-      "text": "Good.",
-      "sound_effect": null
-    },
-    {
-      "id": "s18",
-      "text": "I'm proud of you.",
-      "sound_effect": null
-    },
-    {
-      "id": "s19",
-      "text": "Don't look behind the couch.",
-      "sound_effect": null
-    },
-    {
-      "id": "s20",
-      "text": "You're not ready.",
+      "text": "Nine hours. Perfectly.",
       "sound_effect": null
     }
   ]

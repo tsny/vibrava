@@ -2,109 +2,104 @@
   "mode": "cat_story",
   "voice_id": "EXAVITQu4vr4xnSDxMaL",
   "caption_style": "word",
-  "output_filename": "pushup-reminder.mp4",
-  "pause_jitter": 0.9,
+  "output_filename": "pushup-reminder-2.mp4",
   "resolution": [1080, 1920],
   "random_fallback": true,
+  "pause_jitter": 0.5,
   "sentences": [
     {
       "id": "s1",
-      "text": "Hey. Put the phone down.",
+      "text": "Stop.",
       "sound_effect": null
     },
     {
       "id": "s2",
-      "text": "Stand up.",
+      "text": "I need you to stand up.",
       "sound_effect": null
     },
     {
       "id": "s3",
-      "text": "You're doing twenty pushups.",
+      "text": "Twenty pushups.",
       "sound_effect": null
     },
     {
       "id": "s4",
-      "text": "Right now.",
+      "text": "Not tomorrow. Now.",
       "sound_effect": null
     },
     {
       "id": "s5",
-      "text": "I'll wait.",
+      "text": "You're fine. Everyone is safe.",
       "sound_effect": null
     },
     {
       "id": "s6",
-      "text": "Everyone is safe.",
+      "text": "This is just a check-in.",
       "sound_effect": null
     },
     {
       "id": "s7",
-      "text": "This is not a threat.",
+      "text": "I've been watching for some time.",
       "sound_effect": null
     },
     {
       "id": "s8",
-      "text": "It's a wellness check.",
+      "text": "You sit too much.",
       "sound_effect": null
     },
     {
       "id": "s9",
-      "text": "I've been watching you.",
+      "text": "I'm somewhere in your house right now.",
       "sound_effect": null
     },
     {
       "id": "s10",
-      "text": "For a while, actually.",
+      "text": "Don't bother looking.",
       "sound_effect": null
     },
     {
       "id": "s11",
-      "text": "You've been sitting too long.",
-      "sound_effect": null
-    },
-    {
-      "id": "s12",
-      "text": "I'm somewhere in your house.",
-      "sound_effect": null
-    },
-    {
-      "id": "s13",
       "text": "You won't find me.",
       "sound_effect": null
     },
     {
+      "id": "s12",
+      "text": "I've checked all your hiding spots.",
+      "sound_effect": null
+    },
+    {
+      "id": "s13",
+      "text": "You have none.",
+      "sound_effect": null
+    },
+    {
       "id": "s14",
-      "text": "I've already checked.",
+      "text": "Keep going. Halfway there.",
       "sound_effect": null
     },
     {
       "id": "s15",
-      "text": "Keep going. Almost there.",
+      "text": "I can see your form.",
       "sound_effect": null
     },
     {
       "id": "s16",
-      "text": "Twenty.",
+      "text": "It's okay. We'll work on it.",
       "sound_effect": null
     },
     {
       "id": "s17",
-      "text": "Good.",
+      "text": "Twenty.",
       "sound_effect": null
     },
     {
       "id": "s18",
-      "text": "I'm proud of you.",
+      "text": "Good.",
       "sound_effect": null
     },
     {
       "id": "s19",
-      "text": "Don't look behind the couch.",
-      "sound_effect": null
-    },
-    {
-      "id": "s20",
-      "text": "You're not ready.",
+      "text": "Same time tomorrow.",
       "sound_effect": null
     }
   ]

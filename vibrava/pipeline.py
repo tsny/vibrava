@@ -1,9 +1,11 @@
 import json
+import os
 import random
 from datetime import datetime
 from pathlib import Path
 
-from vibrava.audio.tts import generate as tts_generate
+from vibrava.audio import elevenlabs as tts_elevenlabs
+from vibrava.audio import tiktok as tts_tiktok
 from vibrava.clips.index import ClipIndex
 from vibrava.compose import editor
 from vibrava.config import Config
@@ -18,18 +20,32 @@ def _run_cat_story(script_path: Path, config: Config) -> None:
     cache_dir = config.cache_path / "tts"
     voice_id = script.voice_id or config.elevenlabs.default_voice_id
 
+    use_tiktok = script.tts_provider == "tiktok"
+    if use_tiktok:
+        tiktok_session_id = os.environ.get("TIKTOK_SESSION_ID", "")
+        if not tiktok_session_id:
+            raise ValueError("TIKTOK_SESSION_ID env var is required for tts_provider=tiktok")
+
     audio_map = {}
     image_map = {}
 
     for sentence in script.sentences:
         print(f"[tts]   {sentence.text[:60]}{'...' if len(sentence.text) > 60 else ''}")
-        seg = tts_generate(
-            text=sentence.text,
-            voice_id=voice_id,
-            model_id=config.elevenlabs.model_id,
-            api_key=config.elevenlabs.api_key,
-            cache_dir=cache_dir,
-        )
+        if use_tiktok:
+            seg = tts_tiktok.generate(
+                text=sentence.text,
+                voice_id=voice_id,
+                session_id=tiktok_session_id,
+                cache_dir=cache_dir,
+            )
+        else:
+            seg = tts_elevenlabs.generate(
+                text=sentence.text,
+                voice_id=voice_id,
+                model_id=config.elevenlabs.model_id,
+                api_key=config.elevenlabs.api_key,
+                cache_dir=cache_dir,
+            )
         audio_map[sentence.id] = seg
 
         img_path = matcher.match(sentence.text, index)
@@ -67,6 +83,7 @@ def _run_cat_story(script_path: Path, config: Config) -> None:
         caption_style=script.caption_style,
         music_path=music_path,
         music_volume=script.music_volume,
+        pause_jitter=script.pause_jitter,
     )
     print(f"[done] {output_path}")
 

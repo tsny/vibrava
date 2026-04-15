@@ -1,3 +1,4 @@
+import random
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +19,7 @@ from vibrava.audio.tts import AudioSegment, WordTimestamp
 from vibrava.platforms.cat.story_parser import Sentence
 
 # ---------------------------------------------------------------------------
-# Font loading
+# Font loading (cached by size)
 # ---------------------------------------------------------------------------
 
 _FONT_CANDIDATES = [
@@ -28,14 +29,20 @@ _FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
 ]
 
+_font_cache: dict[int, ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
+
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    for path in _FONT_CANDIDATES:
-        try:
-            return ImageFont.truetype(path, size)
-        except (OSError, IOError):
-            continue
-    return ImageFont.load_default()
+    if size not in _font_cache:
+        for path in _FONT_CANDIDATES:
+            try:
+                _font_cache[size] = ImageFont.truetype(path, size)
+                break
+            except (OSError, IOError):
+                continue
+        else:
+            _font_cache[size] = ImageFont.load_default()
+    return _font_cache[size]
 
 
 # ---------------------------------------------------------------------------
@@ -108,45 +115,51 @@ def _render_caption_line(text: str, width: int, height: int) -> np.ndarray:
     return np.array(img)
 
 
+def _build_caption_layout(
+    words: list[WordTimestamp],
+    width: int,
+    height: int,
+) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, list[tuple[int, int]]]:
+    """
+    Compute font and (x, y) position for each word once per sentence.
+    Returns (font, word_positions).
+    """
+    font_size = max(44, height // 26)
+    font = _load_font(font_size)
+    full_text = " ".join(w.word for w in words)
+    lines = _wrap_text(full_text, font, int(width * 0.88))
+
+    line_height = font_size + 12
+    y = height - len(lines) * line_height - 120
+
+    dummy = Image.new("RGBA", (1, 1))
+    draw = ImageDraw.Draw(dummy)
+
+    positions: list[tuple[int, int]] = []
+    for line in lines:
+        x = (width - draw.textbbox((0, 0), line, font=font)[2]) // 2
+        for word in line.split():
+            positions.append((x, y))
+            x += draw.textbbox((0, 0), word + " ", font=font)[2]
+        y += line_height
+
+    return font, positions
+
+
 def _render_caption_word(
     words: list[WordTimestamp],
     current_word_idx: int,
     width: int,
     height: int,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    positions: list[tuple[int, int]],
 ) -> np.ndarray:
-    """
-    Render all words of the sentence near the bottom, with the current
-    word highlighted in yellow.
-    """
-    font_size = max(44, height // 26)
-    font = _load_font(font_size)
-    full_text = " ".join(w.word for w in words)
-    max_text_width = int(width * 0.88)
-    lines = _wrap_text(full_text, font, max_text_width)
-
+    """Render all words with the current word highlighted in yellow."""
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-
-    line_height = font_size + 12
-    total_text_height = len(lines) * line_height
-    y = height - total_text_height - 120
-
-    current_word = words[current_word_idx].word if current_word_idx < len(words) else ""
-    word_counter = 0
-
-    for line in lines:
-        line_words = line.split()
-        x_cursor = (width - draw.textbbox((0, 0), line, font=font)[2]) // 2
-
-        for word in line_words:
-            color = "yellow" if word == current_word and word_counter == current_word_idx else "white"
-            draw.text((x_cursor, y), word, font=font, fill=color, stroke_width=4, stroke_fill="black")
-            word_width = draw.textbbox((0, 0), word + " ", font=font)[2]
-            x_cursor += word_width
-            word_counter += 1
-
-        y += line_height
-
+    for i, (w, pos) in enumerate(zip(words, positions)):
+        color = "yellow" if i == current_word_idx else "white"
+        draw.text(pos, w.word, font=font, fill=color, stroke_width=4, stroke_fill="black")
     return np.array(img)
 
 
@@ -208,6 +221,7 @@ def build(
     caption_style: str,
     music_path: Path | None = None,
     music_volume: float = 0.15,
+    pause_jitter: float = 0.0,
     fps: int = 30,
 ) -> None:
     width, height = resolution
@@ -216,7 +230,8 @@ def build(
     for sentence in sentences:
         seg = audio_map[sentence.id]
         img_path = image_map.get(sentence.id)
-        total_duration = seg.duration + pause_duration
+        gap = random.uniform(0.1, pause_jitter) if pause_jitter > 0 else pause_duration
+        total_duration = seg.duration + gap
 
         # Base video frame
         if img_path and img_path.exists():
@@ -242,12 +257,19 @@ def build(
             caption_clip = ImageClip(caption_frame, ismask=False).set_duration(seg.duration)
             video_clip = CompositeVideoClip([video_clip, caption_clip])
 
+        elif caption_style == "word" and not seg.words:
+            # No word timestamps (e.g. TikTok TTS) — fall back to line captions
+            caption_frame = _render_caption_line(sentence.text, width, height)
+            caption_clip = ImageClip(caption_frame, ismask=False).set_duration(seg.duration)
+            video_clip = CompositeVideoClip([video_clip, caption_clip])
+
         elif caption_style == "word" and seg.words:
+            font, positions = _build_caption_layout(seg.words, width, height)
             caption_clips = []
             for i, word in enumerate(seg.words):
                 end = seg.words[i + 1].start if i + 1 < len(seg.words) else seg.duration
                 duration = max(end - word.start, 0.05)
-                frame_arr = _render_caption_word(seg.words, i, width, height)
+                frame_arr = _render_caption_word(seg.words, i, width, height, font, positions)
                 wclip = (
                     ImageClip(frame_arr, ismask=False)
                     .set_start(word.start)
