@@ -1,0 +1,39 @@
+{
+  "mode": "cat_story",
+  "voice_id": "EXAVITQu4vr4xnSDxMaL",
+  "caption_style": "word",
+  "output_filename": "benny-cow-spaghetti-foe.mp4",
+  "resolution": [1080, 1920],
+  "sentences": [
+    {
+      "id": "s1",
+      "text": "Benny the cow had one agenda: spaghetti.",
+      "sound_effect": null
+    },
+    {
+      "id": "s2",
+      "text": "He twirled his fork like he owned the place.",
+      "sound_effect": null
+    },
+    {
+      "id": "s3",
+      "text": "Then a foe walked in and reached for his bowl.",
+      "sound_effect": null
+    },
+    {
+      "id": "s4",
+      "text": "Benny did not flinch.",
+      "sound_effect": null
+    },
+    {
+      "id": "s5",
+      "text": "The foe left. The spaghetti stayed.",
+      "sound_effect": null
+    },
+    {
+      "id": "s6",
+      "text": "Benny ate in silence. He always wins.",
+      "sound_effect": null
+    }
+  ]
+}

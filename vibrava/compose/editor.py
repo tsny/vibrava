@@ -7,7 +7,7 @@ from moviepy.editor import (
     ImageClip,
     concatenate_videoclips,
 )
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 from vibrava.audio.tts import AudioSegment, WordTimestamp
 from vibrava.platforms.cat.story_parser import Sentence
@@ -39,22 +39,12 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 def _make_background_frame(img_path: Path, width: int, height: int) -> np.ndarray:
     """
-    Blurred image scaled to fill the frame as background,
-    with the original image scaled to fit (with padding) composited on top.
+    Image scaled to fit (with padding) centered on a black background.
     """
     img = Image.open(img_path).convert("RGB")
 
-    # Background: scale to fill, center-crop, blur
-    bg_ratio = max(width / img.width, height / img.height)
-    bg = img.resize(
-        (int(img.width * bg_ratio), int(img.height * bg_ratio)), Image.LANCZOS
-    )
-    left = (bg.width - width) // 2
-    top = (bg.height - height) // 2
-    bg = bg.crop((left, top, left + width, top + height))
-    bg = bg.filter(ImageFilter.GaussianBlur(radius=30))
+    bg = Image.new("RGB", (width, height), (0, 0, 0))
 
-    # Foreground: scale to fit with 5% padding
     padding = 0.90
     fg_ratio = min(width / img.width, height / img.height) * padding
     fg = img.resize(
