@@ -2,6 +2,7 @@ import random
 from pathlib import Path
 
 import numpy as np
+from tqdm import tqdm
 from moviepy.editor import (
     AudioFileClip,
     ColorClip,
@@ -170,16 +171,25 @@ def _render_caption_word(
 _VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".webm"}
 
 
-def _make_video_clip(video_path: Path, width: int, height: int):
-    """Load a video clip and scale-to-fit with padding. Plays at natural duration."""
+def _make_video_clip(video_path: Path, width: int, height: int, duration: float):
+    """Load a video clip, trim to sentence duration, and scale-to-fit with padding."""
     clip = VideoFileClip(str(video_path), audio=False)
+    if clip.duration > duration:
+        clip = clip.subclip(0, duration)
+    else:
+        clip = clip.set_duration(duration)
     padding = 0.90
     scale = min(width / clip.w, height / clip.h) * padding
     new_w, new_h = int(clip.w * scale), int(clip.h * scale)
-    clip = clip.resize((new_w, new_h))
-    bg = ColorClip((width, height), color=(0, 0, 0)).set_duration(clip.duration)
-    clip = clip.set_position(((width - new_w) // 2, (height - new_h) // 2))
-    return CompositeVideoClip([bg, clip])
+    x, y = (width - new_w) // 2, (height - new_h) // 2
+
+    def _place_frame(frame):
+        resized = np.array(Image.fromarray(frame.astype("uint8")).resize((new_w, new_h), Image.LANCZOS))
+        bg = np.zeros((height, width, 3), dtype="uint8")
+        bg[y:y + new_h, x:x + new_w] = resized
+        return bg
+
+    return clip.fl_image(_place_frame)
 
 
 def _make_gif_clip(gif_path: Path, width: int, height: int, duration: float):
@@ -221,13 +231,17 @@ def build(
     caption_style: str,
     music_path: Path | None = None,
     music_volume: float = 0.15,
+    music_start: float = 0.0,
     pause_jitter: float = 0.0,
     fps: int = 30,
 ) -> None:
     width, height = resolution
     clips = []
 
-    for sentence in sentences:
+    estimated_duration = sum(audio_map[s.id].duration for s in sentences)
+    print(f"[compose] {len(sentences)} sentences · ~{estimated_duration:.1f}s of audio")
+
+    for sentence in tqdm(sentences, desc="building clips", unit="clip"):
         seg = audio_map[sentence.id]
         img_path = image_map.get(sentence.id)
         gap = random.uniform(0.1, pause_jitter) if pause_jitter > 0 else pause_duration
@@ -237,7 +251,7 @@ def build(
         if img_path and img_path.exists():
             ext = img_path.suffix.lower()
             if ext in _VIDEO_EXTENSIONS:
-                video_clip = _make_video_clip(img_path, width, height)
+                video_clip = _make_video_clip(img_path, width, height, total_duration)
             elif ext == ".gif":
                 video_clip = _make_gif_clip(img_path, width, height, total_duration)
             else:
@@ -283,11 +297,13 @@ def build(
     final = concatenate_videoclips(clips, method="compose")
 
     if music_path:
+        music_duration = final.duration - music_start
         music = AudioFileClip(str(music_path)).volumex(music_volume)
-        if music.duration < final.duration:
-            music = afx.audio_loop(music, duration=final.duration)
+        if music.duration < music_duration:
+            music = afx.audio_loop(music, duration=music_duration)
         else:
-            music = music.subclip(0, final.duration)
+            music = music.subclip(0, music_duration)
+        music = music.set_start(music_start)
         final = final.set_audio(CompositeAudioClip([final.audio, music]))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -296,5 +312,5 @@ def build(
         fps=fps,
         codec="libx264",
         audio_codec="aac",
-        logger=None,
+        logger="bar",
     )

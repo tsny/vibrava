@@ -52,8 +52,12 @@ def _run_cat_story(script_path: Path, config: Config) -> None:
         if img_path is None and script.random_fallback and index._clips:
             entry = random.choice(index._clips)
             img_path = index.resolve_path(entry)
+            label = f"{img_path.name} (random fallback)"
+        elif img_path:
+            label = img_path.name
+        else:
+            label = "no match"
         image_map[sentence.id] = img_path
-        label = img_path.name if img_path else "no match"
         print(f"[match] {label}")
 
     pause = (
@@ -83,6 +87,7 @@ def _run_cat_story(script_path: Path, config: Config) -> None:
         caption_style=script.caption_style,
         music_path=music_path,
         music_volume=script.music_volume,
+        music_start=script.music_start,
         pause_jitter=script.pause_jitter,
     )
     print(f"[done] {output_path}")

@@ -1,0 +1,101 @@
+{
+  "mode": "cat_story",
+  "voice_id": "EXAVITQu4vr4xnSDxMaL",
+  "caption_style": "word",
+  "output_filename": "fallen-out-of-bed-2.mp4",
+  "resolution": [1080, 1920],
+  "random_fallback": true,
+  "pause_jitter": 0.4,
+  "sentences": [
+    {
+      "id": "s1",
+      "text": "send this to a friend",
+      "sound_effect": null
+    },
+    {
+      "id": "s2",
+      "text": "you know exactly who",
+      "sound_effect": null
+    },
+    {
+      "id": "s3",
+      "text": "have you ever fallen out of bed",
+      "sound_effect": null
+    },
+    {
+      "id": "s4",
+      "text": "not as a kid",
+      "sound_effect": null
+    },
+    {
+      "id": "s5",
+      "text": "as a full grown adult",
+      "sound_effect": null
+    },
+    {
+      "id": "s6",
+      "text": "just rolled straight off",
+      "sound_effect": null
+    },
+    {
+      "id": "s7",
+      "text": "hit the floor",
+      "sound_effect": null
+    },
+    {
+      "id": "s8",
+      "text": "laid there for a second",
+      "sound_effect": null
+    },
+    {
+      "id": "s9",
+      "text": "staring at the ceiling",
+      "sound_effect": null
+    },
+    {
+      "id": "s10",
+      "text": "you thought it was random",
+      "sound_effect": null
+    },
+    {
+      "id": "s11",
+      "text": "it wasn't",
+      "sound_effect": null
+    },
+    {
+      "id": "s12",
+      "text": "your mom fell out of bed too",
+      "sound_effect": null
+    },
+    {
+      "id": "s13",
+      "text": "same night",
+      "sound_effect": null
+    },
+    {
+      "id": "s14",
+      "text": "different house",
+      "sound_effect": null
+    },
+    {
+      "id": "s15",
+      "text": "it's passed down",
+      "sound_effect": null
+    },
+    {
+      "id": "s16",
+      "text": "scientists won't touch this one",
+      "sound_effect": null
+    },
+    {
+      "id": "s17",
+      "text": "but we know",
+      "sound_effect": null
+    },
+    {
+      "id": "s18",
+      "text": "now your friend knows too",
+      "sound_effect": null
+    }
+  ]
+}

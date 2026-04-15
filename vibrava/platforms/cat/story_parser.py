@@ -20,6 +20,7 @@ class CatStoryScript:
     pause_duration: float | None = None  # overrides config if set
     music: str | None = None             # filename in res/music/, e.g. "lofi.mp3"
     music_volume: float = 0.15
+    music_start: float = 0.0            # seconds into the video when music begins
     random_fallback: bool = False        # use a random image when no tag match found
     pause_jitter: float = 0.0            # when > 0, randomize gap to uniform(0.1, pause_jitter); max 1.0
     tts_provider: str = "elevenlabs"    # "elevenlabs" | "tiktok"
@@ -51,6 +52,7 @@ def parse(path: Path) -> CatStoryScript:
         pause_duration=data.get("pause_duration"),
         music=data.get("music"),
         music_volume=data.get("music_volume", 0.15),
+        music_start=data.get("music_start", 0.0),
         random_fallback=data.get("random_fallback", False),
         pause_jitter=min(data.get("pause_jitter", 0.0), 1.0),
         tts_provider=data.get("tts_provider", "elevenlabs"),

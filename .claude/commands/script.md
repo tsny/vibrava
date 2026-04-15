@@ -25,6 +25,8 @@ Short sentences (4–6 words) run ~1.5–2s each. Aim for enough sentences that 
 - Filler words: "basically", "kind of", "you know"
 - Passive voice
 - Anything that sounds like narration for a documentary
+- Capitalizing the first word of sentences
+- Ending sentences with periods
 
 ## Output Format
 
