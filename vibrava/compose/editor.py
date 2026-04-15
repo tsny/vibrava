@@ -3,10 +3,12 @@ from pathlib import Path
 import numpy as np
 from moviepy.editor import (
     AudioFileClip,
+    ColorClip,
     CompositeAudioClip,
     CompositeVideoClip,
     ImageClip,
     ImageSequenceClip,
+    VideoFileClip,
     concatenate_videoclips,
 )
 import moviepy.audio.fx.all as afx
@@ -152,6 +154,21 @@ def _render_caption_word(
 # GIF clip builder
 # ---------------------------------------------------------------------------
 
+_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".webm"}
+
+
+def _make_video_clip(video_path: Path, width: int, height: int):
+    """Load a video clip and scale-to-fit with padding. Plays at natural duration."""
+    clip = VideoFileClip(str(video_path), audio=False)
+    padding = 0.90
+    scale = min(width / clip.w, height / clip.h) * padding
+    new_w, new_h = int(clip.w * scale), int(clip.h * scale)
+    clip = clip.resize((new_w, new_h))
+    bg = ColorClip((width, height), color=(0, 0, 0)).set_duration(clip.duration)
+    clip = clip.set_position(((width - new_w) // 2, (height - new_h) // 2))
+    return CompositeVideoClip([bg, clip])
+
+
 def _make_gif_clip(gif_path: Path, width: int, height: int, duration: float):
     """Load an animated GIF via PIL, resize frames, loop to fill duration."""
     gif = Image.open(gif_path)
@@ -203,7 +220,10 @@ def build(
 
         # Base video frame
         if img_path and img_path.exists():
-            if img_path.suffix.lower() == ".gif":
+            ext = img_path.suffix.lower()
+            if ext in _VIDEO_EXTENSIONS:
+                video_clip = _make_video_clip(img_path, width, height)
+            elif ext == ".gif":
                 video_clip = _make_gif_clip(img_path, width, height, total_duration)
             else:
                 frame = _make_background_frame(img_path, width, height)

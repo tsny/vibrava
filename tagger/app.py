@@ -18,12 +18,20 @@ def pick_folder() -> str | None:
 st.set_page_config(layout="wide", page_title="Vibrava Tagger")
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".webm"}
+ALL_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
 THUMB_SIZE = 300  # gallery thumbnail square size in pixels
 
 
 def make_thumbnail(img_path: Path) -> Image.Image:
     """Resize and pad to a square so all gallery tiles are uniform."""
+    if img_path.suffix.lower() in VIDEO_EXTENSIONS:
+        square = Image.new("RGB", (THUMB_SIZE, THUMB_SIZE), (24, 24, 24))
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(square)
+        draw.text((THUMB_SIZE // 2, THUMB_SIZE // 2), "▶", fill=(180, 180, 180), anchor="mm")
+        return square
     img = Image.open(img_path).convert("RGB")
     img.thumbnail((THUMB_SIZE, THUMB_SIZE))
     square = Image.new("RGB", (THUMB_SIZE, THUMB_SIZE), (24, 24, 24))
@@ -136,7 +144,7 @@ def open_folder(path_str: str) -> bool:
         return False
     st.session_state.folder = str(path)
     st.session_state.images = sorted(
-        [f for f in path.iterdir() if f.suffix.lower() in IMAGE_EXTENSIONS],
+        [f for f in path.iterdir() if f.suffix.lower() in ALL_EXTENSIONS],
         key=lambda f: f.name,
     )
     st.session_state.current_idx = 0
@@ -261,7 +269,10 @@ with gallery_tab:
         # Image
         img_col, tag_col = st.columns([3, 2])
         with img_col:
-            st.image(Image.open(img_path), use_container_width=True)
+            if img_path.suffix.lower() in VIDEO_EXTENSIONS:
+                st.video(str(img_path))
+            else:
+                st.image(Image.open(img_path), use_container_width=True)
 
         with tag_col:
             tags = current_tags()
