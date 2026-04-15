@@ -18,6 +18,8 @@ class CatStoryScript:
     caption_style: str = "line"          # "word" | "line" | "none"
     resolution: tuple[int, int] = field(default_factory=lambda: (1080, 1920))
     pause_duration: float | None = None  # overrides config if set
+    music: str | None = None             # filename in res/music/, e.g. "lofi.mp3"
+    music_volume: float = 0.15
 
 
 def parse(path: Path) -> CatStoryScript:
@@ -44,4 +46,6 @@ def parse(path: Path) -> CatStoryScript:
         caption_style=data.get("caption_style", "line"),
         resolution=(res[0], res[1]),
         pause_duration=data.get("pause_duration"),
+        music=data.get("music"),
+        music_volume=data.get("music_volume", 0.15),
     )

@@ -47,4 +47,6 @@ Write the script as a JSON file matching this schema exactly. Use the Write tool
 - `output_filename`: kebab-case slug based on the topic, e.g. `monday-morning.mp4`
 - `caption_style`: always `"word"` (word-by-word highlight)
 - `sound_effect`: always `null` for now
+- `music`: optional filename from `res/music/`, e.g. `"lofi.mp3"`. Omit if no music.
+- `music_volume`: optional float, default `0.15`. Controls backing music level relative to speech.
 - Sentence IDs: `s1`, `s2`, etc.

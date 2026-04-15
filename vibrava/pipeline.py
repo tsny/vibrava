@@ -42,6 +42,13 @@ def _run_cat_story(script_path: Path, config: Config) -> None:
     )
     output_path = config.output_path / script.output_filename
 
+    music_path = None
+    if script.music:
+        music_path = config.library_path / "music" / script.music
+        if not music_path.exists():
+            print(f"[warn] music file not found: {music_path}")
+            music_path = None
+
     print(f"[compose] → {output_path}")
     editor.build(
         sentences=script.sentences,
@@ -51,6 +58,8 @@ def _run_cat_story(script_path: Path, config: Config) -> None:
         resolution=script.resolution,
         pause_duration=pause,
         caption_style=script.caption_style,
+        music_path=music_path,
+        music_volume=script.music_volume,
     )
     print(f"[done] {output_path}")
 

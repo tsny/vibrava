@@ -3,10 +3,12 @@ from pathlib import Path
 import numpy as np
 from moviepy.editor import (
     AudioFileClip,
+    CompositeAudioClip,
     CompositeVideoClip,
     ImageClip,
     concatenate_videoclips,
 )
+import moviepy.audio.fx.all as afx
 from PIL import Image, ImageDraw, ImageFont
 
 from vibrava.audio.tts import AudioSegment, WordTimestamp
@@ -157,6 +159,8 @@ def build(
     resolution: tuple[int, int],
     pause_duration: float,
     caption_style: str,
+    music_path: Path | None = None,
+    music_volume: float = 0.15,
     fps: int = 30,
 ) -> None:
     width, height = resolution
@@ -202,6 +206,15 @@ def build(
         clips.append(video_clip)
 
     final = concatenate_videoclips(clips, method="compose")
+
+    if music_path:
+        music = AudioFileClip(str(music_path)).volumex(music_volume)
+        if music.duration < final.duration:
+            music = afx.audio_loop(music, duration=final.duration)
+        else:
+            music = music.subclip(0, final.duration)
+        final = final.set_audio(CompositeAudioClip([final.audio, music]))
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     final.write_videofile(
         str(output_path),

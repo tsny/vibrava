@@ -2,17 +2,18 @@
   "mode": "cat_story",
   "voice_id": "EXAVITQu4vr4xnSDxMaL",
   "caption_style": "word",
+  "music": "spooky.mp3",
   "output_filename": "monday_cat.mp4",
   "resolution": [1080, 1920],
   "sentences": [
     {
       "id": "s1",
-      "text": "It was a Monday morning and the cat was not pleased.",
+      "text": "Lemme tells you a think about what happened to my friend... Kelby",
       "sound_effect": null
     },
     {
       "id": "s2",
-      "text": "The food bowl was completely empty.",
+      "text": "He saw what he thought was his mom",
       "sound_effect": null
     },
     {
