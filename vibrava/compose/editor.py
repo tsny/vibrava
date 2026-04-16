@@ -1,3 +1,4 @@
+import multiprocessing
 import random
 from pathlib import Path
 
@@ -314,5 +315,7 @@ def build(
         fps=fps,
         codec="libx264",
         audio_codec="aac",
+        preset="ultrafast",
+        threads=multiprocessing.cpu_count(),
         logger="bar",
     )
