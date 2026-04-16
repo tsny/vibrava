@@ -2,8 +2,6 @@ import hashlib
 import json
 from pathlib import Path
 
-from anthropic import Anthropic
-
 MOODS = [
     "sad",
     "horror",
@@ -34,36 +32,36 @@ _SYSTEM_PROMPT = (
     "No punctuation, no explanation, no other words."
 )
 
+ANTHROPIC_MODEL = "claude-haiku-4-5"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
+
 
 def infer_moods(
     text: str,
     cache_dir: Path,
-    client: Anthropic | None = None,
+    provider: str,
 ) -> list[str]:
     """Classify the emotional tone of *text* into 1–2 moods from MOODS.
 
-    Results are cached on disk by md5(text) so repeat runs are free.
-    Returns [] if the classifier call fails or no valid moods are parsed.
+    *provider* must be "anthropic" or "gemini". Results are cached on disk by
+    md5(provider|text) so repeat runs are free and each provider gets its own
+    cache namespace.
     """
     cache_dir.mkdir(parents=True, exist_ok=True)
-    key = hashlib.md5(f"moods|{text}".encode()).hexdigest()
+    key = hashlib.md5(f"moods|{provider}|{text}".encode()).hexdigest()
     cache_file = cache_dir / f"{key}.json"
 
     if cache_file.exists():
         with open(cache_file) as f:
             return json.load(f)
 
-    if client is None:
-        client = Anthropic()
+    if provider == "anthropic":
+        raw = _call_anthropic(text)
+    elif provider == "gemini":
+        raw = _call_gemini(text)
+    else:
+        raise ValueError(f"Unknown mood provider: {provider!r}")
 
-    resp = client.messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=30,
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": text}],
-    )
-
-    raw = next((b.text for b in resp.content if b.type == "text"), "")
     parsed = [m.strip().lower() for m in raw.split(",")]
     moods = [m for m in parsed if m in MOODS][:2]
 
@@ -71,6 +69,35 @@ def infer_moods(
         json.dump(moods, f)
 
     return moods
+
+
+def _call_anthropic(text: str) -> str:
+    from anthropic import Anthropic
+
+    client = Anthropic()
+    resp = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=30,
+        system=_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": text}],
+    )
+    return next((b.text for b in resp.content if b.type == "text"), "")
+
+
+def _call_gemini(text: str) -> str:
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client()
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=text,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT,
+            max_output_tokens=30,
+        ),
+    )
+    return resp.text or ""
 
 
 def mood_tags(moods: list[str]) -> list[str]:

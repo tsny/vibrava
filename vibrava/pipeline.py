@@ -13,6 +13,27 @@ from vibrava.platforms.cat import matcher, mood
 from vibrava.platforms.cat.story_parser import parse as parse_video_script
 
 
+def _resolve_mood_provider() -> str | None:
+    """Pick a mood-inference provider, or None if no keys are set.
+
+    ``MOOD_PROVIDER`` env var wins when set (must be "anthropic" or "gemini").
+    Otherwise, auto-detect: prefer Anthropic if its key is present, fall back
+    to Gemini if only its key is present.
+    """
+    explicit = os.environ.get("MOOD_PROVIDER", "").strip().lower()
+    if explicit:
+        if explicit not in ("anthropic", "gemini"):
+            raise ValueError(
+                f"MOOD_PROVIDER must be 'anthropic' or 'gemini', got {explicit!r}"
+            )
+        return explicit
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
+        return "gemini"
+    return None
+
+
 def _run_video_script(script_path: Path, config: Config) -> None:
     script = parse_video_script(script_path)
 
@@ -39,11 +60,14 @@ def _run_video_script(script_path: Path, config: Config) -> None:
     audio_map = {}
     image_map = {}
 
-    mood_enabled = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    mood_provider = _resolve_mood_provider()
+    mood_enabled = mood_provider is not None
     mood_cache_dir = config.cache_path / "moods"
-    print(
-        f"[mood]  {'enabled (claude-haiku-4-5)' if mood_enabled else 'disabled (no ANTHROPIC_API_KEY)'}"
-    )
+    if mood_enabled:
+        model = mood.ANTHROPIC_MODEL if mood_provider == "anthropic" else mood.GEMINI_MODEL
+        print(f"[mood]  enabled (provider={mood_provider}, model={model})")
+    else:
+        print("[mood]  disabled (no ANTHROPIC_API_KEY or GEMINI_API_KEY)")
 
     for sentence in script.sentences:
         preview = sentence.text[:60] + ("..." if len(sentence.text) > 60 else "")
@@ -66,7 +90,11 @@ def _run_video_script(script_path: Path, config: Config) -> None:
         audio_map[sentence.id] = seg
 
         if mood_enabled:
-            moods = mood.infer_moods(sentence.text, cache_dir=mood_cache_dir)
+            moods = mood.infer_moods(
+                sentence.text,
+                cache_dir=mood_cache_dir,
+                provider=mood_provider,
+            )
             if moods:
                 print(f"[mood]  {', '.join(moods)}")
                 img_path = matcher.match_with_tags(
