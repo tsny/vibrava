@@ -512,3 +512,21 @@ def match(text: str, index: ClipIndex) -> Path | None:
     if not results:
         return None
     return index.resolve_path(results[0])
+
+
+def match_with_tags(
+    text: str,
+    index: ClipIndex,
+    extra_tags: list[str],
+) -> Path | None:
+    """Same as ``match`` but folds *extra_tags* in alongside the word-derived tags."""
+    tags = expand_tags(extract_tags(text))
+    seen = set(tags)
+    for t in extra_tags:
+        if t not in seen:
+            seen.add(t)
+            tags.append(t)
+    results = index.find_by_tags(tags)
+    if not results:
+        return None
+    return index.resolve_path(results[0])

@@ -9,7 +9,7 @@ from vibrava.audio import tiktok as tts_tiktok
 from vibrava.clips.index import ClipIndex
 from vibrava.compose import editor
 from vibrava.config import Config
-from vibrava.platforms.cat import matcher
+from vibrava.platforms.cat import matcher, mood
 from vibrava.platforms.cat.story_parser import parse as parse_video_script
 
 
@@ -30,11 +30,24 @@ def _run_video_script(script_path: Path, config: Config) -> None:
     else:
         voice_id = script.voice_id or config.elevenlabs.default_voice_id
 
+    pause = (
+        script.pause_duration
+        if script.pause_duration is not None
+        else config.pause_duration
+    )
+
     audio_map = {}
     image_map = {}
 
+    mood_enabled = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    mood_cache_dir = config.cache_path / "moods"
+    print(
+        f"[mood]  {'enabled (claude-haiku-4-5)' if mood_enabled else 'disabled (no ANTHROPIC_API_KEY)'}"
+    )
+
     for sentence in script.sentences:
-        print(f"[tts]   {sentence.text[:60]}{'...' if len(sentence.text) > 60 else ''}")
+        preview = sentence.text[:60] + ("..." if len(sentence.text) > 60 else "")
+        print(f"[tts]   {preview}  (pause={pause}s)")
         if use_tiktok:
             seg = tts_tiktok.generate(
                 text=sentence.text,
@@ -52,7 +65,17 @@ def _run_video_script(script_path: Path, config: Config) -> None:
             )
         audio_map[sentence.id] = seg
 
-        img_path = matcher.match(sentence.text, index)
+        if mood_enabled:
+            moods = mood.infer_moods(sentence.text, cache_dir=mood_cache_dir)
+            if moods:
+                print(f"[mood]  {', '.join(moods)}")
+                img_path = matcher.match_with_tags(
+                    sentence.text, index, mood.mood_tags(moods)
+                )
+            else:
+                img_path = matcher.match(sentence.text, index)
+        else:
+            img_path = matcher.match(sentence.text, index)
         if img_path is None and script.random_fallback and index._clips:
             entry = random.choice(index._clips)
             img_path = index.resolve_path(entry)
@@ -64,11 +87,6 @@ def _run_video_script(script_path: Path, config: Config) -> None:
         image_map[sentence.id] = img_path
         print(f"[match] {label}")
 
-    pause = (
-        script.pause_duration
-        if script.pause_duration is not None
-        else config.pause_duration
-    )
     ts = datetime.now().strftime("%m%d-%H%M")
     stem = Path(script.output_filename).stem
     output_path = config.output_path / f"{stem}_{ts}.mp4"

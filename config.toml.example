@@ -3,6 +3,9 @@ api_key = ""           # or set ELEVENLABS_API_KEY env var
 default_voice_id = "Adam"
 model_id = "eleven_multilingual_v2"
 
+# Optional: set ANTHROPIC_API_KEY env var to enable mood-based tag expansion
+# (per-sentence Haiku call, cached on disk; ~$0.0001/call).
+
 [library]
 path = "res"           # folder containing clip_index.json and images
 
