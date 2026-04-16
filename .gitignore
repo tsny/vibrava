@@ -9,6 +9,9 @@ config.toml
 # Generated output
 output/
 
+# Scripts (local only)
+scripts/
+
 # TTS cache
 cache/
 
