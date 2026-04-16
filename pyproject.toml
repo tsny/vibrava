@@ -5,13 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "vibrava"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "elevenlabs>=1.0.0",
     "moviepy>=1.0.3,<2.0",
     "pillow>=10.0.0",
     "streamlit>=1.35.0",
+    "tiktok-voice",
 ]
 
 [project.scripts]
 vibrava = "vibrava.cli:main"
+
+[tool.uv.sources]
+tiktok-voice = { path = "../tiktok-voice", editable = true }

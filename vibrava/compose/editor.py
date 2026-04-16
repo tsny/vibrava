@@ -245,7 +245,11 @@ def build(
         seg = audio_map[sentence.id]
         img_path = image_map.get(sentence.id)
         gap = random.uniform(0.1, pause_jitter) if pause_jitter > 0 else pause_duration
-        total_duration = seg.duration + gap
+
+        # Load audio first — ffprobe/API durations can diverge from what MoviePy can read.
+        audio_clip = AudioFileClip(str(seg.path))
+        audio_duration = audio_clip.duration
+        total_duration = audio_duration + gap
 
         # Base video frame
         if img_path and img_path.exists():
@@ -261,27 +265,25 @@ def build(
             frame = np.zeros((height, width, 3), dtype=np.uint8)
             video_clip = ImageClip(frame).set_duration(total_duration)
 
-        # Audio — only for speech portion, silence fills the pause naturally
-        audio_clip = AudioFileClip(str(seg.path)).subclip(0, seg.duration)
         video_clip = video_clip.set_audio(audio_clip)
 
         # Captions
         if caption_style == "line":
             caption_frame = _render_caption_line(sentence.text, width, height)
-            caption_clip = ImageClip(caption_frame, ismask=False).set_duration(seg.duration)
+            caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
             video_clip = CompositeVideoClip([video_clip, caption_clip])
 
         elif caption_style == "word" and not seg.words:
             # No word timestamps (e.g. TikTok TTS) — fall back to line captions
             caption_frame = _render_caption_line(sentence.text, width, height)
-            caption_clip = ImageClip(caption_frame, ismask=False).set_duration(seg.duration)
+            caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
             video_clip = CompositeVideoClip([video_clip, caption_clip])
 
         elif caption_style == "word" and seg.words:
             font, positions = _build_caption_layout(seg.words, width, height)
             caption_clips = []
             for i, word in enumerate(seg.words):
-                end = seg.words[i + 1].start if i + 1 < len(seg.words) else seg.duration
+                end = seg.words[i + 1].start if i + 1 < len(seg.words) else audio_duration
                 duration = max(end - word.start, 0.05)
                 frame_arr = _render_caption_word(seg.words, i, width, height, font, positions)
                 wclip = (

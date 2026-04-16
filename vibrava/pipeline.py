@@ -10,21 +10,25 @@ from vibrava.clips.index import ClipIndex
 from vibrava.compose import editor
 from vibrava.config import Config
 from vibrava.platforms.cat import matcher
-from vibrava.platforms.cat.story_parser import parse as parse_cat_story
+from vibrava.platforms.cat.story_parser import parse as parse_video_script
 
 
-def _run_cat_story(script_path: Path, config: Config) -> None:
-    script = parse_cat_story(script_path)
+def _run_video_script(script_path: Path, config: Config) -> None:
+    script = parse_video_script(script_path)
 
     index = ClipIndex.load(config.library_path / "clip_index.json")
     cache_dir = config.cache_path / "tts"
-    voice_id = script.voice_id or config.elevenlabs.default_voice_id
 
     use_tiktok = script.tts_provider == "tiktok"
+    provider_name = "tiktok" if use_tiktok else "elevenlabs"
+    print(f"[tts]   provider={provider_name}")
     if use_tiktok:
         tiktok_session_id = os.environ.get("TIKTOK_SESSION_ID", "")
         if not tiktok_session_id:
             raise ValueError("TIKTOK_SESSION_ID env var is required for tts_provider=tiktok")
+        voice_id = script.voice_id or os.environ.get("TIKTOK_VOICE_ID", "en_us_002")
+    else:
+        voice_id = script.voice_id or config.elevenlabs.default_voice_id
 
     audio_map = {}
     image_map = {}
@@ -98,6 +102,6 @@ def run(script_path: Path, config: Config) -> None:
         mode = json.load(f).get("mode")
 
     if mode == "cat_story":
-        _run_cat_story(script_path, config)
+        _run_video_script(script_path, config)
     else:
         raise ValueError(f"Unsupported mode: '{mode}'")

@@ -11,7 +11,7 @@ class Sentence:
 
 
 @dataclass
-class CatStoryScript:
+class VideoScript:
     voice_id: str
     output_filename: str
     sentences: list[Sentence]
@@ -26,7 +26,7 @@ class CatStoryScript:
     tts_provider: str = "elevenlabs"    # "elevenlabs" | "tiktok"
 
 
-def parse(path: Path) -> CatStoryScript:
+def parse(path: Path) -> VideoScript:
     with open(path) as f:
         data = json.load(f)
 
@@ -43,7 +43,7 @@ def parse(path: Path) -> CatStoryScript:
     ]
 
     res = data.get("resolution", [1080, 1920])
-    return CatStoryScript(
+    return VideoScript(
         voice_id=data.get("voice_id", "21m00Tcm4TlvDq8ikWAM"),
         output_filename=data.get("output_filename", "output.mp4"),
         sentences=sentences,
