@@ -58,7 +58,7 @@ def _run_video_script(script_path: Path, config: Config) -> None:
     )
 
     audio_map = {}
-    image_map = {}
+    image_map: dict[str, list[Path | None]] = {}
 
     mood_provider = _resolve_mood_provider()
     mood_enabled = mood_provider is not None
@@ -113,8 +113,13 @@ def _run_video_script(script_path: Path, config: Config) -> None:
                 label = img_path.name
             else:
                 label = "no match"
-        image_map[sentence.id] = img_path
-        print(f"[match] {label}")
+
+        img2_path = (index.library_dir / sentence.image2) if sentence.image2 else None
+        image_map[sentence.id] = [img_path, img2_path]
+        if img2_path:
+            print(f"[match] {label} + {img2_path.name}")
+        else:
+            print(f"[match] {label}")
 
     ts = datetime.now().strftime("%m%d-%H%M")
     stem = Path(script.output_filename).stem
@@ -194,6 +199,7 @@ def _resolve_video_script(script_path: Path, config: Config) -> None:
 
     for sentence_data, image_val in zip(raw["sentences"], resolved_images):
         sentence_data["image"] = image_val
+        sentence_data.setdefault("image2", None)
 
     out_path = script_path.with_stem(script_path.stem + ".resolved")
     with open(out_path, "w") as f:

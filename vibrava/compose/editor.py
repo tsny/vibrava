@@ -222,10 +222,25 @@ def _make_gif_clip(gif_path: Path, width: int, height: int, duration: float):
 # Main build function
 # ---------------------------------------------------------------------------
 
+def _make_image_clip(img_path: Path | None, width: int, height: int, duration: float):
+    """Return a video clip for a single image (or black if None)."""
+    if img_path and img_path.exists():
+        ext = img_path.suffix.lower()
+        if ext in _VIDEO_EXTENSIONS:
+            return _make_video_clip(img_path, width, height, duration)
+        elif ext == ".gif":
+            return _make_gif_clip(img_path, width, height, duration)
+        else:
+            frame = _make_background_frame(img_path, width, height)
+            return ImageClip(frame).set_duration(duration)
+    frame = np.zeros((height, width, 3), dtype=np.uint8)
+    return ImageClip(frame).set_duration(duration)
+
+
 def build(
     sentences: list[Sentence],
     audio_map: dict[str, AudioSegment],
-    image_map: dict[str, Path | None],
+    image_map: dict[str, list[Path | None]],
     output_path: Path,
     resolution: tuple[int, int],
     pause_duration: float,
@@ -244,7 +259,9 @@ def build(
 
     for sentence in tqdm(sentences, desc="building clips", unit="clip"):
         seg = audio_map[sentence.id]
-        img_path = image_map.get(sentence.id)
+        images = image_map.get(sentence.id) or [None]
+        img_path = images[0] if images else None
+        img2_path = images[1] if len(images) > 1 else None
         gap = random.uniform(0.1, pause_jitter) if pause_jitter > 0 else pause_duration
 
         # Load audio first — ffprobe/API durations can diverge from what MoviePy can read.
@@ -252,19 +269,14 @@ def build(
         audio_duration = audio_clip.duration
         total_duration = audio_duration + gap
 
-        # Base video frame
-        if img_path and img_path.exists():
-            ext = img_path.suffix.lower()
-            if ext in _VIDEO_EXTENSIONS:
-                video_clip = _make_video_clip(img_path, width, height, total_duration)
-            elif ext == ".gif":
-                video_clip = _make_gif_clip(img_path, width, height, total_duration)
-            else:
-                frame = _make_background_frame(img_path, width, height)
-                video_clip = ImageClip(frame).set_duration(total_duration)
+        # Base video: split at halfway point when a second image is provided
+        if img2_path:
+            half = audio_duration / 2
+            clip1 = _make_image_clip(img_path, width, height, half)
+            clip2 = _make_image_clip(img2_path, width, height, total_duration - half)
+            video_clip = concatenate_videoclips([clip1, clip2], method="compose")
         else:
-            frame = np.zeros((height, width, 3), dtype=np.uint8)
-            video_clip = ImageClip(frame).set_duration(total_duration)
+            video_clip = _make_image_clip(img_path, width, height, total_duration)
 
         video_clip = video_clip.set_audio(audio_clip)
 

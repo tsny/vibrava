@@ -8,6 +8,7 @@ from PIL import Image
 st.set_page_config(layout="wide", page_title="Vibrava Script Editor")
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
 THUMB_SMALL = 80
 THUMB_PICK = 100
 
@@ -16,15 +17,29 @@ THUMB_PICK = 100
 # Helpers
 # ---------------------------------------------------------------------------
 
-def load_config_library() -> str:
+def _load_config() -> dict:
     cfg = Path("config.toml")
     if cfg.exists():
         with open(cfg, "rb") as f:
-            data = tomllib.load(f)
-        lib = data.get("library", {}).get("path")
-        if lib:
-            return lib
-    return "res"
+            return tomllib.load(f)
+    return {}
+
+
+def load_config_library() -> str:
+    lib = _load_config().get("library", {}).get("path")
+    return lib or "res"
+
+
+def load_config_sfx() -> str:
+    path = _load_config().get("sfx", {}).get("path")
+    return path or "sfx"
+
+
+def load_sfx_files(sfx_path: str) -> list[str]:
+    p = Path(sfx_path)
+    if not p.exists():
+        return []
+    return sorted(f.name for f in p.iterdir() if f.suffix.lower() in AUDIO_EXTENSIONS)
 
 
 def make_thumbnail(img_path: Path, size: int) -> Image.Image:
@@ -40,11 +55,19 @@ def load_clip_index(library_path: str) -> list[dict]:
     if not idx.exists():
         return []
     with open(idx) as f:
-        return json.load(f).get("clips", [])
+        clips = json.load(f).get("clips", [])
+    seen: set[str] = set()
+    unique = []
+    for c in clips:
+        cid = c.get("id", c.get("file", ""))
+        if cid not in seen:
+            seen.add(cid)
+            unique.append(c)
+    return unique
 
 
-def sentence_image_path(sentence: dict) -> Path | None:
-    img = sentence.get("image")
+def sentence_image_path(sentence: dict, key: str = "image") -> Path | None:
+    img = sentence.get(key)
     if not img:
         return None
     p = Path(st.session_state.library_path) / img
@@ -61,7 +84,10 @@ def init_state():
         "script_data": None,
         "library_path": load_config_library(),
         "clip_index": [],
+        "sfx_path": load_config_sfx(),
+        "sfx_files": [],
         "selected_sentence": None,
+        "picker_slot": "image",  # "image" | "image2"
         "picker_search": "",
     }
     for k, v in defaults.items():
@@ -72,6 +98,9 @@ init_state()
 
 if not st.session_state.clip_index:
     st.session_state.clip_index = load_clip_index(st.session_state.library_path)
+
+if not st.session_state.sfx_files:
+    st.session_state.sfx_files = load_sfx_files(st.session_state.sfx_path)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +134,12 @@ with st.sidebar:
     if lib_val != st.session_state.library_path:
         st.session_state.library_path = lib_val
         st.session_state.clip_index = load_clip_index(lib_val)
+        st.rerun()
+
+    sfx_val = st.text_input("Sound effects path", value=st.session_state.sfx_path)
+    if sfx_val != st.session_state.sfx_path:
+        st.session_state.sfx_path = sfx_val
+        st.session_state.sfx_files = load_sfx_files(sfx_val)
         st.rerun()
 
     st.divider()
@@ -182,13 +217,15 @@ left_col, right_col = st.columns([5, 6])
 # ── Left: sentence list ────────────────────────────────────────────────────
 
 with left_col:
-    header_cols = st.columns([1, 6, 1, 1])
+    header_cols = st.columns([1, 6, 1, 1, 1])
     header_cols[1].markdown("**Text**")
-    header_cols[2].markdown("**Img**")
+    header_cols[2].markdown("**Img 1**")
+    header_cols[3].markdown("**Img 2**")
 
     for i, sentence in enumerate(sentences):
         is_selected = st.session_state.selected_sentence == i
-        img_path = sentence_image_path(sentence)
+        img_path = sentence_image_path(sentence, "image")
+        img2_path = sentence_image_path(sentence, "image2")
 
         border_color = "#4A90E2" if is_selected else "#333"
         st.markdown(
@@ -196,7 +233,7 @@ with left_col:
             unsafe_allow_html=True,
         )
 
-        row = st.columns([1, 6, 1, 1])
+        row = st.columns([1, 6, 1, 1, 1])
 
         with row[0]:
             st.markdown(
@@ -214,21 +251,44 @@ with left_col:
             )
             if new_text != sentence.get("text", ""):
                 sentences[i]["text"] = new_text
+            sfx_files = st.session_state.sfx_files
+            sfx_options = ["(none)"] + sfx_files
+            current_sfx = sentence.get("sound_effect") or "(none)"
+            sfx_idx = sfx_options.index(current_sfx) if current_sfx in sfx_options else 0
+            chosen_sfx = st.selectbox(
+                "sound_effect",
+                sfx_options,
+                index=sfx_idx,
+                key=f"sfx_{i}",
+                label_visibility="collapsed",
+            )
+            new_sfx_val = None if chosen_sfx == "(none)" else chosen_sfx
+            if new_sfx_val != sentence.get("sound_effect"):
+                sentences[i]["sound_effect"] = new_sfx_val
 
-        with row[2]:
-            if img_path:
-                st.image(make_thumbnail(img_path, THUMB_SMALL), use_container_width=True)
-            else:
-                st.markdown(
-                    f"<div style='width:{THUMB_SMALL}px;height:{THUMB_SMALL}px;"
-                    "background:#2a2a2a;border-radius:4px;border:1px dashed #555'></div>",
-                    unsafe_allow_html=True,
-                )
+        for slot, col, path in [("image", row[2], img_path), ("image2", row[3], img2_path)]:
+            with col:
+                if path:
+                    st.image(make_thumbnail(path, THUMB_SMALL), use_container_width=True)
+                else:
+                    st.markdown(
+                        f"<div style='width:{THUMB_SMALL}px;height:{THUMB_SMALL}px;"
+                        "background:#2a2a2a;border-radius:4px;border:1px dashed #555'></div>",
+                        unsafe_allow_html=True,
+                    )
+                active = is_selected and st.session_state.picker_slot == slot
+                btn_type = "primary" if active else "secondary"
+                label = "1️⃣" if slot == "image" else "2️⃣"
+                if st.button(label, key=f"pick_{slot}_{i}", use_container_width=True, type=btn_type):
+                    if active:
+                        st.session_state.selected_sentence = None
+                    else:
+                        st.session_state.selected_sentence = i
+                        st.session_state.picker_slot = slot
+                    st.rerun()
 
-        with row[3]:
-            if st.button("🖼", key=f"pick_{i}", help="Pick image", use_container_width=True):
-                st.session_state.selected_sentence = None if is_selected else i
-                st.rerun()
+        with row[4]:
+            st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
             if st.button("✕", key=f"del_{i}", help="Remove sentence", use_container_width=True):
                 sentences.pop(i)
                 if st.session_state.selected_sentence == i:
@@ -257,21 +317,29 @@ with right_col:
         st.stop()
 
     sentence = sentences[sel]
+    slot = st.session_state.picker_slot  # "image" | "image2"
     preview = sentence.get("text", "")[:60]
-    st.markdown(f"**Sentence {sel + 1}** — _{preview}_")
+    slot_label = "Image 1" if slot == "image" else "Image 2 (½ way)"
+    st.markdown(f"**Sentence {sel + 1}** — _{preview}_ · picking **{slot_label}**")
 
-    img_path = sentence_image_path(sentence)
-    if img_path:
-        img_col, clear_col = st.columns([3, 1])
-        with img_col:
-            st.image(Image.open(img_path), width=400)
-            st.caption(sentence.get("image", ""))
-        with clear_col:
-            if st.button("✕ Clear", key="clear_img"):
-                sentences[sel]["image"] = None
-                st.rerun()
-    else:
-        st.caption("No image assigned.")
+    # Show both current images side by side
+    img_path = sentence_image_path(sentence, "image")
+    img2_path = sentence_image_path(sentence, "image2")
+    thumb_col1, thumb_col2 = st.columns(2)
+    for col, key, path, lbl in [
+        (thumb_col1, "image", img_path, "Image 1"),
+        (thumb_col2, "image2", img2_path, "Image 2"),
+    ]:
+        with col:
+            st.caption(lbl)
+            if path:
+                st.image(Image.open(path), use_container_width=True)
+                st.caption(sentence.get(key, ""))
+                if st.button(f"✕ Clear {lbl}", key=f"clear_{key}"):
+                    sentences[sel][key] = None
+                    st.rerun()
+            else:
+                st.caption("None")
 
     st.divider()
 
@@ -291,7 +359,7 @@ with right_col:
         clips = [c for c in clips if clip_matches(c)]
 
     lib = Path(st.session_state.library_path)
-    current_image = sentence.get("image")
+    current_image = sentence.get(slot)
 
     COLS = 5
     if not clips:
@@ -310,9 +378,9 @@ with right_col:
                     btn_type = "primary" if is_current else "secondary"
                     if st.button(
                         label,
-                        key=f"assign_{sel}_{clip['id']}",
+                        key=f"assign_{sel}_{slot}_{clip['id']}",
                         use_container_width=True,
                         type=btn_type,
                     ):
-                        sentences[sel]["image"] = clip["file"]
+                        sentences[sel][slot] = clip["file"]
                         st.rerun()
