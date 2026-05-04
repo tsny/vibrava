@@ -175,7 +175,15 @@ with st.sidebar:
         d = st.session_state.script_data
         st.markdown("**Settings**")
 
-        d["voice_id"] = st.text_input("Voice ID", value=d.get("voice_id") or "")
+        providers = ["elevenlabs", "tiktok"]
+        cur_provider = d.get("tts_provider", "elevenlabs")
+        d["tts_provider"] = st.selectbox(
+            "TTS provider",
+            providers,
+            index=providers.index(cur_provider) if cur_provider in providers else 0,
+        )
+        voice_hint = "e.g. en_us_002" if d["tts_provider"] == "tiktok" else "e.g. 21m00Tcm4TlvDq8ikWAM"
+        d["voice_id"] = st.text_input("Voice ID", value=d.get("voice_id") or "", placeholder=voice_hint) or None
         d["caption_style"] = st.selectbox(
             "Caption style",
             ["word", "line", "none"],

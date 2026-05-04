@@ -14,7 +14,7 @@ class Sentence:
 
 @dataclass
 class VideoScript:
-    voice_id: str
+    voice_id: str | None
     output_filename: str
     sentences: list[Sentence]
     caption_style: str = "line"          # "word" | "line" | "none"
@@ -48,7 +48,7 @@ def parse(path: Path) -> VideoScript:
 
     res = data.get("resolution", [1080, 1920])
     return VideoScript(
-        voice_id=data.get("voice_id", "21m00Tcm4TlvDq8ikWAM"),
+        voice_id=data.get("voice_id") or None,
         output_filename=data.get("output_filename", "output.mp4"),
         sentences=sentences,
         caption_style=data.get("caption_style", "line"),
