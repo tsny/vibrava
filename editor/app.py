@@ -8,7 +8,15 @@ from PIL import Image
 st.set_page_config(layout="wide", page_title="Vibrava Script Editor")
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
+
+TYPE_FILTER_OPTIONS = ["all", "jpg/png", "gif", "mp4"]
+TYPE_FILTER_EXTS: dict[str, set[str]] = {
+    "jpg/png": {".jpg", ".jpeg", ".png", ".webp"},
+    "gif": {".gif"},
+    "mp4": {".mp4", ".mov", ".webm"},
+}
 THUMB_SMALL = 80
 THUMB_PICK = 100
 
@@ -89,6 +97,7 @@ def init_state():
         "selected_sentence": None,
         "picker_slot": "image",  # "image" | "image2"
         "picker_search": "",
+        "picker_type_filter": "all",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -273,6 +282,19 @@ with left_col:
             new_sfx_val = None if chosen_sfx == "(none)" else chosen_sfx
             if new_sfx_val != sentence.get("sound_effect"):
                 sentences[i]["sound_effect"] = new_sfx_val
+            if new_sfx_val:
+                new_offset = st.number_input(
+                    "sfx_offset",
+                    value=float(sentence.get("sfx_offset") or 0.0),
+                    min_value=0.0,
+                    step=0.1,
+                    format="%.1f",
+                    key=f"sfx_offset_{i}",
+                    label_visibility="collapsed",
+                    help="Seconds from sentence start when sfx plays",
+                )
+                if new_offset != sentence.get("sfx_offset", 0.0):
+                    sentences[i]["sfx_offset"] = new_offset
 
         for slot, col, path in [("image", row[2], img_path), ("image2", row[3], img2_path)]:
             with col:
@@ -357,9 +379,19 @@ with right_col:
         placeholder="tag or filename…",
         key="picker_search",
     )
+    type_filter = st.radio(
+        "Type",
+        TYPE_FILTER_OPTIONS,
+        index=TYPE_FILTER_OPTIONS.index(st.session_state.picker_type_filter),
+        horizontal=True,
+        key="picker_type_filter",
+    )
     terms = [t.strip().lower() for t in search.split() if t.strip()]
 
     clips = st.session_state.clip_index
+    if type_filter != "all":
+        allowed_exts = TYPE_FILTER_EXTS[type_filter]
+        clips = [c for c in clips if Path(c.get("file", "")).suffix.lower() in allowed_exts]
     if terms:
         def clip_matches(clip: dict) -> bool:
             haystack = " ".join(clip.get("tags", [])).lower() + " " + clip.get("file", "").lower()
@@ -380,6 +412,14 @@ with right_col:
                     img_file = lib / clip["file"]
                     if img_file.exists() and img_file.suffix.lower() in IMAGE_EXTENSIONS:
                         st.image(make_thumbnail(img_file, THUMB_PICK), use_container_width=True)
+                    elif img_file.exists() and img_file.suffix.lower() in VIDEO_EXTENSIONS:
+                        st.markdown(
+                            f"<div style='width:{THUMB_PICK}px;height:{THUMB_PICK}px;"
+                            "background:#1a1a2e;border-radius:4px;border:1px solid #555;"
+                            "display:flex;align-items:center;justify-content:center;"
+                            "font-size:1.6em'>▶️</div>",
+                            unsafe_allow_html=True,
+                        )
 
                     is_current = current_image == clip["file"]
                     label = f"✓ {clip['file']}" if is_current else clip["file"]

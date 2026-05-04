@@ -18,6 +18,7 @@ class Config:
     cache_path: Path
     output_path: Path
     pause_duration: float
+    sfx_path: Path
 
 
 def load(path: Path = Path("config.toml")) -> Config:
@@ -41,4 +42,5 @@ def load(path: Path = Path("config.toml")) -> Config:
         cache_path=Path(raw.get("cache", {}).get("path", "cache")),
         output_path=Path(raw.get("output", {}).get("path", "output")),
         pause_duration=raw.get("compose", {}).get("pause_duration", 0.3),
+        sfx_path=Path(raw.get("sfx", {}).get("path", "sfx")),
     )

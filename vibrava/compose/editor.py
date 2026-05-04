@@ -245,6 +245,7 @@ def build(
     resolution: tuple[int, int],
     pause_duration: float,
     caption_style: str,
+    sfx_map: dict[str, tuple[Path, float] | None] | None = None,
     music_path: Path | None = None,
     music_volume: float = 0.15,
     music_start: float = 0.0,
@@ -278,7 +279,14 @@ def build(
         else:
             video_clip = _make_image_clip(img_path, width, height, total_duration)
 
-        video_clip = video_clip.set_audio(audio_clip)
+        sfx_entry = (sfx_map or {}).get(sentence.id)
+        if sfx_entry:
+            sfx_path, sfx_offset = sfx_entry
+            sfx_clip = AudioFileClip(str(sfx_path)).set_start(max(sfx_offset, 0.0))
+            mixed = CompositeAudioClip([audio_clip, sfx_clip])
+            video_clip = video_clip.set_audio(mixed)
+        else:
+            video_clip = video_clip.set_audio(audio_clip)
 
         # Captions
         if caption_style == "line":

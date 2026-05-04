@@ -59,6 +59,7 @@ def _run_video_script(script_path: Path, config: Config) -> None:
 
     audio_map = {}
     image_map: dict[str, list[Path | None]] = {}
+    sfx_map: dict[str, tuple[Path, float] | None] = {}
 
     mood_provider = _resolve_mood_provider()
     mood_enabled = mood_provider is not None
@@ -121,6 +122,16 @@ def _run_video_script(script_path: Path, config: Config) -> None:
         else:
             print(f"[match] {label}")
 
+        if sentence.sound_effect:
+            sfx_path = config.sfx_path / sentence.sound_effect
+            if sfx_path.exists():
+                sfx_map[sentence.id] = (sfx_path, sentence.sfx_offset)
+            else:
+                print(f"[warn]  sfx not found: {sfx_path}")
+                sfx_map[sentence.id] = None
+        else:
+            sfx_map[sentence.id] = None
+
     ts = datetime.now().strftime("%m%d-%H%M")
     stem = Path(script.output_filename).stem
     output_path = config.output_path / f"{stem}_{ts}.mp4"
@@ -137,6 +148,7 @@ def _run_video_script(script_path: Path, config: Config) -> None:
         sentences=script.sentences,
         audio_map=audio_map,
         image_map=image_map,
+        sfx_map=sfx_map,
         output_path=output_path,
         resolution=script.resolution,
         pause_duration=pause,
