@@ -21,6 +21,12 @@ Write for short-form vertical video. The goal is to feel native to TikTok — no
 
 Short sentences (4–6 words) run ~1.5–2s each. Aim for enough sentences that the total spoken time clears 20 seconds.
 
+**Echo transitions:**
+Rarely, start a sentence with the last word of the previous sentence to create a rhythmic callback (e.g. "...and he just sat there" → "there. just sitting."). Use at most once per script, at a moment of emphasis or disbelief.
+
+**Stutters:**
+Occasionally have a sentence stutter for comedic effect — repeat the first word or syllable 1–2 times (e.g. "he— he just stared at me" or "i i cannot believe this"). Use sparingly (1–2 per script max), at moments of shock or disbelief.
+
 **Avoid:**
 - Filler words: "basically", "kind of", "you know"
 - Passive voice
@@ -54,4 +60,9 @@ Write the script as a JSON file matching this schema exactly. Use the Write tool
 - `sound_effect`: always `null` for now
 - `music`: optional filename from `res/music/`, e.g. `"lofi.mp3"`. Omit if no music.
 - `music_volume`: optional float, default `0.15`. Controls backing music level relative to speech.
+- `music_start`: optional float, seconds into the video when music begins. Default `0.0`.
+- `pause_duration`: optional float, seconds of silence after each sentence. Overrides the config default. Use ~0.5–1.2s for dramatic pauses, shorter for fast-paced scripts.
+- `pause_jitter`: optional float (max `1.0`). When > 0, randomizes each gap to a value between `0.1` and this value. Adds natural rhythm — good for conversational scripts.
+- `random_fallback`: optional bool, default `false`. When `true`, uses a random image if no tag match is found instead of leaving the segment blank.
+- `tts_provider`: optional, `"elevenlabs"` (default) or `"tiktok"`.
 - Sentence IDs: `s1`, `s2`, etc.

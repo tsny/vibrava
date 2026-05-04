@@ -21,7 +21,7 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".webm"}
 ALL_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
-THUMB_SIZE = 300  # gallery thumbnail square size in pixels
+THUMB_SIZE = 160  # gallery thumbnail square size in pixels
 
 
 def make_thumbnail(img_path: Path) -> Image.Image:
@@ -337,7 +337,7 @@ setTimeout(function() {
         if not images:
             st.info("No images found in this folder.")
         else:
-            COLS = 4
+            COLS = 7
             for row_start in range(0, len(images), COLS):
                 cols = st.columns(COLS)
                 for col_idx, img_path in enumerate(images[row_start:row_start + COLS]):

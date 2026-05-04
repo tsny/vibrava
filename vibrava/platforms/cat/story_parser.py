@@ -8,6 +8,7 @@ class Sentence:
     id: str
     text: str
     sound_effect: str | None = None
+    image: str | None = None  # relative path from library root; skips matching when set
 
 
 @dataclass
@@ -38,6 +39,7 @@ def parse(path: Path) -> VideoScript:
             id=s["id"],
             text=s["text"],
             sound_effect=s.get("sound_effect"),
+            image=s.get("image"),
         )
         for s in data["sentences"]
     ]

@@ -89,29 +89,30 @@ def _run_video_script(script_path: Path, config: Config) -> None:
             )
         audio_map[sentence.id] = seg
 
-        if mood_enabled:
-            moods = mood.infer_moods(
-                sentence.text,
-                cache_dir=mood_cache_dir,
-                provider=mood_provider,
-            )
-            if moods:
-                print(f"[mood]  {', '.join(moods)}")
-                img_path = matcher.match_with_tags(
-                    sentence.text, index, mood.mood_tags(moods)
-                )
-            else:
-                img_path = matcher.match(sentence.text, index)
+        if sentence.image:
+            img_path = index.library_dir / sentence.image
+            label = f"{Path(sentence.image).name} (pinned)"
         else:
             img_path = matcher.match(sentence.text, index)
-        if img_path is None and script.random_fallback and index._clips:
-            entry = random.choice(index._clips)
-            img_path = index.resolve_path(entry)
-            label = f"{img_path.name} (random fallback)"
-        elif img_path:
-            label = img_path.name
-        else:
-            label = "no match"
+            if img_path is None and mood_enabled:
+                moods = mood.infer_moods(
+                    sentence.text,
+                    cache_dir=mood_cache_dir,
+                    provider=mood_provider,
+                )
+                if moods:
+                    print(f"[mood]  {', '.join(moods)}")
+                    img_path = matcher.match_with_tags(
+                        sentence.text, index, mood.mood_tags(moods)
+                    )
+            if img_path is None and script.random_fallback and index._clips:
+                entry = random.choice(index._clips)
+                img_path = index.resolve_path(entry)
+                label = f"{img_path.name} (random fallback)"
+            elif img_path:
+                label = img_path.name
+            else:
+                label = "no match"
         image_map[sentence.id] = img_path
         print(f"[match] {label}")
 
@@ -143,11 +144,78 @@ def _run_video_script(script_path: Path, config: Config) -> None:
     print(f"[done] {output_path}")
 
 
+def _resolve_video_script(script_path: Path, config: Config) -> None:
+    with open(script_path) as f:
+        raw = json.load(f)
+
+    script = parse_video_script(script_path)
+    index = ClipIndex.load(config.library_path / "clip_index.json")
+
+    mood_provider = _resolve_mood_provider()
+    mood_enabled = mood_provider is not None
+    mood_cache_dir = config.cache_path / "moods"
+    if mood_enabled:
+        model = mood.ANTHROPIC_MODEL if mood_provider == "anthropic" else mood.GEMINI_MODEL
+        print(f"[mood]  enabled (provider={mood_provider}, model={model})")
+    else:
+        print("[mood]  disabled (no ANTHROPIC_API_KEY or GEMINI_API_KEY)")
+
+    resolved_images: list[str | None] = []
+    for sentence in script.sentences:
+        if sentence.image:
+            image_val = sentence.image
+            label = f"{Path(sentence.image).name} (pinned)"
+        else:
+            img_path = matcher.match(sentence.text, index)
+            if img_path is None and mood_enabled:
+                moods = mood.infer_moods(
+                    sentence.text,
+                    cache_dir=mood_cache_dir,
+                    provider=mood_provider,
+                )
+                if moods:
+                    print(f"[mood]  {', '.join(moods)}")
+                    img_path = matcher.match_with_tags(
+                        sentence.text, index, mood.mood_tags(moods)
+                    )
+            if img_path is None and script.random_fallback and index._clips:
+                entry = random.choice(index._clips)
+                img_path = index.resolve_path(entry)
+                label = f"{img_path.name} (random fallback)"
+            elif img_path:
+                label = img_path.name
+            else:
+                label = "no match"
+            image_val = str(img_path.relative_to(index.library_dir)) if img_path else None
+
+        resolved_images.append(image_val)
+        preview = sentence.text[:60] + ("..." if len(sentence.text) > 60 else "")
+        print(f"[match] {preview} → {label}")
+
+    for sentence_data, image_val in zip(raw["sentences"], resolved_images):
+        sentence_data["image"] = image_val
+
+    out_path = script_path.with_stem(script_path.stem + ".resolved")
+    with open(out_path, "w") as f:
+        json.dump(raw, f, indent=2)
+    print(f"[done]  {out_path}")
+
+
 def run(script_path: Path, config: Config) -> None:
     with open(script_path) as f:
         mode = json.load(f).get("mode")
 
     if mode == "cat_story":
         _run_video_script(script_path, config)
+    else:
+        raise ValueError(f"Unsupported mode: '{mode}'")
+
+
+def resolve(script_path: Path, config: Config) -> None:
+    with open(script_path) as f:
+        mode = json.load(f).get("mode")
+
+    if mode == "cat_story":
+        _resolve_video_script(script_path, config)
     else:
         raise ValueError(f"Unsupported mode: '{mode}'")
