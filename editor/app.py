@@ -339,6 +339,15 @@ with left_col:
                 )
                 if new_offset != sentence.get("sfx_offset", 0.0):
                     sentences[i]["sfx_offset"] = new_offset
+            new_voice_id = st.text_input(
+                "voice_id",
+                value=sentence.get("voice_id") or "",
+                key=f"voice_id_{sv}_{i}",
+                label_visibility="collapsed",
+                placeholder="voice ID (overrides top-level)",
+            ) or None
+            if new_voice_id != sentence.get("voice_id"):
+                sentences[i]["voice_id"] = new_voice_id
 
         for slot, col, path in [("image", row[2], img_path), ("image2", row[3], img2_path)]:
             with col:

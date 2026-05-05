@@ -267,12 +267,12 @@ with gallery_tab:
                 st.rerun()
 
         # Image
-        img_col, tag_col = st.columns([3, 2])
+        img_col, tag_col = st.columns([1, 2])
         with img_col:
             if img_path.suffix.lower() in VIDEO_EXTENSIONS:
                 st.video(str(img_path))
             else:
-                st.image(Image.open(img_path), use_container_width=True)
+                st.image(Image.open(img_path), width=400)
 
         with tag_col:
             tags = current_tags()

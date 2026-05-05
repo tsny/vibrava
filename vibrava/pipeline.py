@@ -72,19 +72,20 @@ def _run_video_script(script_path: Path, config: Config) -> None:
         print("[mood]  disabled (no ANTHROPIC_API_KEY or GEMINI_API_KEY)")
 
     for sentence in script.sentences:
+        effective_voice_id = sentence.voice_id or voice_id
         preview = sentence.text[:60] + ("..." if len(sentence.text) > 60 else "")
         print(f"[tts]   {preview}  (pause={pause}s)")
         if use_tiktok:
             seg = tts_tiktok.generate(
                 text=sentence.text,
-                voice_id=voice_id,
+                voice_id=effective_voice_id,
                 session_id=tiktok_session_id,
                 cache_dir=cache_dir,
             )
         else:
             seg = tts_elevenlabs.generate(
                 text=sentence.text,
-                voice_id=voice_id,
+                voice_id=effective_voice_id,
                 model_id=config.elevenlabs.model_id,
                 api_key=config.elevenlabs.api_key,
                 cache_dir=cache_dir,
