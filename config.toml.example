@@ -23,3 +23,7 @@ pause_duration = 0.3   # seconds of silence between segments
 
 [sfx]
 path = "sfx"           # folder containing sound effect audio files
+
+[hooks]
+# Shell command to run after video generation completes.
+on_complete = "paplay /usr/share/sounds/freedesktop/stereo/window-question.oga 2>/dev/null || true"

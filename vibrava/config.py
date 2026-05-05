@@ -19,6 +19,7 @@ class Config:
     output_path: Path
     pause_duration: float
     sfx_path: Path
+    on_complete: str | None
 
 
 def load(path: Path = Path("config.toml")) -> Config:
@@ -43,4 +44,5 @@ def load(path: Path = Path("config.toml")) -> Config:
         output_path=Path(raw.get("output", {}).get("path", "output")),
         pause_duration=raw.get("compose", {}).get("pause_duration", 0.3),
         sfx_path=Path(raw.get("sfx", {}).get("path", "sfx")),
+        on_complete=raw.get("hooks", {}).get("on_complete", None),
     )

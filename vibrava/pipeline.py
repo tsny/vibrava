@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -159,6 +160,8 @@ def _run_video_script(script_path: Path, config: Config) -> None:
         pause_jitter=script.pause_jitter,
     )
     print(f"[done] {output_path}")
+    if config.on_complete:
+        subprocess.run(config.on_complete, shell=True)
 
 
 def _resolve_video_script(script_path: Path, config: Config) -> None:

@@ -1,7 +1,9 @@
 import json
 import tomllib
+from collections import Counter
 from pathlib import Path
 
+import imageio
 import streamlit as st
 from PIL import Image
 
@@ -50,12 +52,33 @@ def load_sfx_files(sfx_path: str) -> list[str]:
     return sorted(f.name for f in p.iterdir() if f.suffix.lower() in AUDIO_EXTENSIONS)
 
 
+@st.cache_data
+def make_video_thumbnail(video_path: Path, size: int) -> Image.Image | None:
+    try:
+        reader = imageio.get_reader(str(video_path))
+        frame = reader.get_data(0)
+        reader.close()
+        img = Image.fromarray(frame).convert("RGB")
+        img.thumbnail((size, size))
+        square = Image.new("RGB", (size, size), (24, 24, 24))
+        square.paste(img, ((size - img.width) // 2, (size - img.height) // 2))
+        return square
+    except Exception:
+        return None
+
+
+@st.cache_data
 def make_thumbnail(img_path: Path, size: int) -> Image.Image:
     img = Image.open(img_path).convert("RGB")
     img.thumbnail((size, size))
     square = Image.new("RGB", (size, size), (24, 24, 24))
     square.paste(img, ((size - img.width) // 2, (size - img.height) // 2))
     return square
+
+
+@st.cache_data
+def open_image(img_path: Path) -> Image.Image:
+    return Image.open(img_path).convert("RGB")
 
 
 def load_clip_index(library_path: str) -> list[dict]:
@@ -90,6 +113,7 @@ def init_state():
     defaults: dict = {
         "script_path": None,
         "script_data": None,
+        "script_version": 0,
         "library_path": load_config_library(),
         "clip_index": [],
         "sfx_path": load_config_sfx(),
@@ -98,6 +122,7 @@ def init_state():
         "picker_slot": "image",  # "image" | "image2"
         "picker_search": "",
         "picker_type_filter": "all",
+        "picker_page": 0,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -120,6 +145,7 @@ def open_script(path: Path):
     with open(path) as f:
         st.session_state.script_data = json.load(f)
     st.session_state.script_path = str(path)
+    st.session_state.script_version += 1
     st.session_state.selected_sentence = None
 
 
@@ -176,6 +202,23 @@ with st.sidebar:
                 st.rerun()
             else:
                 st.error("File not found.")
+
+    new_name = st.text_input("New script name", placeholder="my_script")
+    if st.button("＋ New script", use_container_width=True):
+        if new_name:
+            scripts_dir.mkdir(exist_ok=True)
+            stem = new_name if new_name.endswith(".json") else f"{new_name}.json"
+            new_path = scripts_dir / stem
+            if new_path.exists():
+                st.error(f"{stem} already exists.")
+            else:
+                blank = {"mode": "cat_story", "sentences": []}
+                with open(new_path, "w") as f:
+                    json.dump(blank, f, indent=2)
+                open_script(new_path)
+                st.rerun()
+        else:
+            st.error("Enter a script name.")
 
     st.divider()
 
@@ -239,6 +282,7 @@ with left_col:
     header_cols[2].markdown("**Img 1**")
     header_cols[3].markdown("**Img 2**")
 
+    sv = st.session_state.script_version
     for i, sentence in enumerate(sentences):
         is_selected = st.session_state.selected_sentence == i
         img_path = sentence_image_path(sentence, "image")
@@ -262,7 +306,7 @@ with left_col:
             new_text = st.text_area(
                 "text",
                 value=sentence.get("text", ""),
-                key=f"text_{i}",
+                key=f"text_{sv}_{i}",
                 height=68,
                 label_visibility="collapsed",
             )
@@ -276,7 +320,7 @@ with left_col:
                 "sound_effect",
                 sfx_options,
                 index=sfx_idx,
-                key=f"sfx_{i}",
+                key=f"sfx_{sv}_{i}",
                 label_visibility="collapsed",
             )
             new_sfx_val = None if chosen_sfx == "(none)" else chosen_sfx
@@ -289,7 +333,7 @@ with left_col:
                     min_value=0.0,
                     step=0.1,
                     format="%.1f",
-                    key=f"sfx_offset_{i}",
+                    key=f"sfx_offset_{sv}_{i}",
                     label_visibility="collapsed",
                     help="Seconds from sentence start when sfx plays",
                 )
@@ -309,7 +353,7 @@ with left_col:
                 active = is_selected and st.session_state.picker_slot == slot
                 btn_type = "primary" if active else "secondary"
                 label = "1️⃣" if slot == "image" else "2️⃣"
-                if st.button(label, key=f"pick_{slot}_{i}", use_container_width=True, type=btn_type):
+                if st.button(label, key=f"pick_{slot}_{sv}_{i}", use_container_width=True, type=btn_type):
                     if active:
                         st.session_state.selected_sentence = None
                     else:
@@ -319,7 +363,7 @@ with left_col:
 
         with row[4]:
             st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
-            if st.button("✕", key=f"del_{i}", help="Remove sentence", use_container_width=True):
+            if st.button("✕", key=f"del_{sv}_{i}", help="Remove sentence", use_container_width=True):
                 sentences.pop(i)
                 if st.session_state.selected_sentence == i:
                     st.session_state.selected_sentence = None
@@ -363,7 +407,7 @@ with right_col:
         with col:
             st.caption(lbl)
             if path:
-                st.image(Image.open(path), use_container_width=True)
+                st.image(open_image(path), width=120)
                 st.caption(sentence.get(key, ""))
                 if st.button(f"✕ Clear {lbl}", key=f"clear_{key}"):
                     sentences[sel][key] = None
@@ -373,11 +417,43 @@ with right_col:
 
     st.divider()
 
+    def _reset_page():
+        st.session_state.picker_page = 0
+
+    # Top tags quick-select
+    tag_counts = Counter(
+        tag for clip in st.session_state.clip_index for tag in clip.get("tags", [])
+    )
+    top_tags = [tag for tag, _ in tag_counts.most_common(20)]
+    if top_tags:
+        active_terms = {t.strip().lower() for t in st.session_state.picker_search.split() if t.strip()}
+        tag_rows = [top_tags[:10], top_tags[10:]]
+        for row_tags in tag_rows:
+            cols = st.columns(len(row_tags))
+            for col, tag in zip(cols, row_tags):
+                with col:
+                    is_active = tag.lower() in active_terms
+                    if st.button(
+                        tag,
+                        key=f"qtag_{tag}",
+                        type="primary" if is_active else "secondary",
+                        use_container_width=True,
+                    ):
+                        terms_set = {t.strip().lower() for t in st.session_state.picker_search.split() if t.strip()}
+                        if tag.lower() in terms_set:
+                            terms_set.discard(tag.lower())
+                        else:
+                            terms_set.add(tag.lower())
+                        st.session_state.picker_search = " ".join(sorted(terms_set))
+                        st.session_state.picker_page = 0
+                        st.rerun()
+
     search = st.text_input(
         "Filter clips",
         value=st.session_state.picker_search,
         placeholder="tag or filename…",
         key="picker_search",
+        on_change=_reset_page,
     )
     type_filter = st.radio(
         "Type",
@@ -385,6 +461,7 @@ with right_col:
         index=TYPE_FILTER_OPTIONS.index(st.session_state.picker_type_filter),
         horizontal=True,
         key="picker_type_filter",
+        on_change=_reset_page,
     )
     terms = [t.strip().lower() for t in search.split() if t.strip()]
 
@@ -402,24 +479,35 @@ with right_col:
     current_image = sentence.get(slot)
 
     COLS = 5
+    PAGE_SIZE = 50
+
     if not clips:
         st.caption("No clips match." if terms else "No clips in library.")
     else:
-        for row_start in range(0, len(clips), COLS):
+        total_pages = max(1, (len(clips) + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = min(st.session_state.picker_page, total_pages - 1)
+        st.session_state.picker_page = page
+        page_clips = clips[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
+
+        for row_start in range(0, len(page_clips), COLS):
             cols = st.columns(COLS)
-            for col_idx, clip in enumerate(clips[row_start:row_start + COLS]):
+            for col_idx, clip in enumerate(page_clips[row_start:row_start + COLS]):
                 with cols[col_idx]:
                     img_file = lib / clip["file"]
                     if img_file.exists() and img_file.suffix.lower() in IMAGE_EXTENSIONS:
                         st.image(make_thumbnail(img_file, THUMB_PICK), use_container_width=True)
                     elif img_file.exists() and img_file.suffix.lower() in VIDEO_EXTENSIONS:
-                        st.markdown(
-                            f"<div style='width:{THUMB_PICK}px;height:{THUMB_PICK}px;"
-                            "background:#1a1a2e;border-radius:4px;border:1px solid #555;"
-                            "display:flex;align-items:center;justify-content:center;"
-                            "font-size:1.6em'>▶️</div>",
-                            unsafe_allow_html=True,
-                        )
+                        thumb = make_video_thumbnail(img_file, THUMB_PICK)
+                        if thumb:
+                            st.image(thumb, use_container_width=True)
+                        else:
+                            st.markdown(
+                                f"<div style='width:{THUMB_PICK}px;height:{THUMB_PICK}px;"
+                                "background:#1a1a2e;border-radius:4px;border:1px solid #555;"
+                                "display:flex;align-items:center;justify-content:center;"
+                                "font-size:1.6em'>▶️</div>",
+                                unsafe_allow_html=True,
+                            )
 
                     is_current = current_image == clip["file"]
                     label = f"✓ {clip['file']}" if is_current else clip["file"]
@@ -432,3 +520,16 @@ with right_col:
                     ):
                         sentences[sel][slot] = clip["file"]
                         st.rerun()
+
+        if total_pages > 1:
+            nav_cols = st.columns([1, 2, 1])
+            with nav_cols[0]:
+                if st.button("← Prev", disabled=page == 0, use_container_width=True):
+                    st.session_state.picker_page -= 1
+                    st.rerun()
+            with nav_cols[1]:
+                st.caption(f"Page {page + 1} of {total_pages} · {len(clips)} clips")
+            with nav_cols[2]:
+                if st.button("Next →", disabled=page >= total_pages - 1, use_container_width=True):
+                    st.session_state.picker_page += 1
+                    st.rerun()
