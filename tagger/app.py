@@ -53,6 +53,8 @@ COMMON_TAGS = [
 # Session state
 # ---------------------------------------------------------------------------
 
+GRID_PAGE_SIZE = 28  # 4 rows × 7 cols
+
 def init_state():
     defaults = {
         "folder": None,
@@ -60,6 +62,9 @@ def init_state():
         "index": {"version": "1", "clips": []},
         "current_idx": 0,
         "view": "gallery",  # "gallery" | "detail"
+        "grid_page": 0,
+        "filter_images": True,
+        "filter_videos": True,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -329,30 +334,68 @@ setTimeout(function() {
 
     # ── Grid view ───────────────────────────────────────────────────────────
     else:
-        images = sorted(
+        all_images = sorted(
             st.session_state.images,
             key=lambda f: bool((c := get_clip(f.name)) and c.get("tags")),
         )
-        st.session_state.images = images
+        st.session_state.images = all_images
+
+        # Filter + pagination controls
+        ctrl_left, ctrl_right = st.columns([3, 2])
+        with ctrl_left:
+            cb_cols = st.columns(2)
+            with cb_cols[0]:
+                show_images = st.checkbox("Images", value=st.session_state.filter_images, key="filter_images")
+            with cb_cols[1]:
+                show_videos = st.checkbox("Videos", value=st.session_state.filter_videos, key="filter_videos")
+
+        images = [
+            f for f in all_images
+            if (f.suffix.lower() in IMAGE_EXTENSIONS and show_images)
+            or (f.suffix.lower() in VIDEO_EXTENSIONS and show_videos)
+        ]
+
+        total_pages = max(1, (len(images) + GRID_PAGE_SIZE - 1) // GRID_PAGE_SIZE)
+        page = min(st.session_state.grid_page, total_pages - 1)
+        st.session_state.grid_page = page
+
+        with ctrl_right:
+            pg_cols = st.columns([1, 2, 1])
+            with pg_cols[0]:
+                if st.button("←", disabled=page == 0, use_container_width=True, key="pg_prev"):
+                    st.session_state.grid_page -= 1
+                    st.rerun()
+            with pg_cols[1]:
+                st.markdown(
+                    f"<p style='text-align:center;margin:0;padding-top:6px'>{page + 1} / {total_pages}</p>",
+                    unsafe_allow_html=True,
+                )
+            with pg_cols[2]:
+                if st.button("→", disabled=page >= total_pages - 1, use_container_width=True, key="pg_next"):
+                    st.session_state.grid_page += 1
+                    st.rerun()
+
         if not images:
             st.info("No images found in this folder.")
         else:
             COLS = 7
-            for row_start in range(0, len(images), COLS):
+            page_images = images[page * GRID_PAGE_SIZE:(page + 1) * GRID_PAGE_SIZE]
+            for row_start in range(0, len(page_images), COLS):
                 cols = st.columns(COLS)
-                for col_idx, img_path in enumerate(images[row_start:row_start + COLS]):
+                for col_idx, img_path in enumerate(page_images[row_start:row_start + COLS]):
                     with cols[col_idx]:
                         clip = get_clip(img_path.name)
                         is_tagged = bool(clip and clip.get("tags"))
                         indicator = "✓" if is_tagged else "○"
 
                         st.image(make_thumbnail(img_path), use_container_width=True)
+                        abs_idx = images.index(img_path)
                         if st.button(
                             f"{indicator} {img_path.name}",
                             key=f"open_{img_path.name}",
                             use_container_width=True,
                         ):
-                            st.session_state.current_idx = row_start + col_idx
+                            st.session_state.current_idx = abs_idx
                             st.session_state.view = "detail"
                             st.rerun()
 

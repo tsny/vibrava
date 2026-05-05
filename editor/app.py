@@ -22,6 +22,21 @@ TYPE_FILTER_EXTS: dict[str, set[str]] = {
 THUMB_SMALL = 80
 THUMB_PICK = 100
 
+ELEVENLABS_VOICES = [
+    ("CwhRBWXzGAHq8TQ4Fs17", "Roger - Laid-Back, Casual, Resonant"),
+    ("EXAVITQu4vr4xnSDxMaL", "Sarah - Mature, Reassuring, Confident"),
+    ("FGY2WhTYpPnrIDTdsKH5", "Laura - Enthusiast, Quirky Attitude"),
+    ("IKne3meq5aSn9XLyUdCD", "Charlie - Deep, Confident, Energetic"),
+    ("JBFqnCBsd6RMkjVDRZzb", "George - Warm, Captivating Storyteller"),
+    ("N2lVS1w4EtoT3dr4eOWO", "Callum - Husky Trickster"),
+    ("SAz9YHcvj6GT2YYXdXww", "River - Relaxed, Neutral, Informative"),
+    ("SOYHLrjzK2X1ezoPC6cr", "Harry - Fierce Warrior"),
+    ("TX3LPaxmHKxFdv7VOQHJ", "Liam - Energetic, Social Media Creator"),
+    ("Xb7hH8MSUJpSbSDYk0k2", "Alice - Clear, Engaging Educator"),
+    ("XrExE9yKIg1WjnnlVkGX", "Matilda - Knowledgable, Professional"),
+    ("bIHbv24MWmeRgasZH58o", "Will - Relaxed Optimist"),
+]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -102,7 +117,7 @@ def sentence_image_path(sentence: dict, key: str = "image") -> Path | None:
     if not img:
         return None
     p = Path(st.session_state.library_path) / img
-    return p if p.exists() and p.suffix.lower() in IMAGE_EXTENSIONS else None
+    return p if p.exists() and p.suffix.lower() in (IMAGE_EXTENSIONS | VIDEO_EXTENSIONS) else None
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +251,11 @@ with st.sidebar:
         )
         voice_hint = "e.g. en_us_002" if d["tts_provider"] == "tiktok" else "e.g. 21m00Tcm4TlvDq8ikWAM"
         d["voice_id"] = st.text_input("Voice ID", value=d.get("voice_id") or "", placeholder=voice_hint) or None
+        if d["tts_provider"] == "elevenlabs":
+            with st.popover("🎤 Browse ElevenLabs voices", use_container_width=True):
+                for vid, name in ELEVENLABS_VOICES:
+                    st.markdown(f"**{name}**")
+                    st.code(vid, language=None)
         d["caption_style"] = st.selectbox(
             "Caption style",
             ["word", "line", "none"],
@@ -272,7 +292,12 @@ fname = Path(st.session_state.script_path).name
 st.markdown(f"### {fname}")
 st.caption(f"{len(sentences)} sentences · mode: {data.get('mode', '?')}")
 
-left_col, right_col = st.columns([5, 6])
+left_col, sep_col, right_col = st.columns([5, 0.05, 6])
+with sep_col:
+    st.markdown(
+        "<div style='border-left:1px solid #444;min-height:800px;width:1px;margin:0 auto'></div>",
+        unsafe_allow_html=True,
+    )
 
 # ── Left: sentence list ────────────────────────────────────────────────────
 
@@ -351,7 +376,19 @@ with left_col:
 
         for slot, col, path in [("image", row[2], img_path), ("image2", row[3], img2_path)]:
             with col:
-                if path:
+                if path and path.suffix.lower() in VIDEO_EXTENSIONS:
+                    thumb = make_video_thumbnail(path, THUMB_SMALL)
+                    if thumb:
+                        st.image(thumb, use_container_width=True)
+                    else:
+                        st.markdown(
+                            f"<div style='width:{THUMB_SMALL}px;height:{THUMB_SMALL}px;"
+                            "background:#1a1a2e;border-radius:4px;border:1px solid #555;"
+                            "display:flex;align-items:center;justify-content:center;"
+                            "font-size:1.4em'>▶️</div>",
+                            unsafe_allow_html=True,
+                        )
+                elif path:
                     st.image(make_thumbnail(path, THUMB_SMALL), use_container_width=True)
                 else:
                     st.markdown(
@@ -415,7 +452,12 @@ with right_col:
     ]:
         with col:
             st.caption(lbl)
-            if path:
+            if path and path.suffix.lower() in VIDEO_EXTENSIONS:
+                thumb = make_video_thumbnail(path, 120)
+                if thumb:
+                    st.image(thumb, width=120)
+                st.caption(sentence.get(key, ""))
+            elif path:
                 st.image(open_image(path), width=120)
                 st.caption(sentence.get(key, ""))
                 if st.button(f"✕ Clear {lbl}", key=f"clear_{key}"):
