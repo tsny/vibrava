@@ -47,6 +47,7 @@ const S = {
 
 const videoCache = new Map();
 const imgBlobCache = new Map(); // file → blob URL
+const sfxAudio = new Audio();
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ const esc = s => String(s ?? '')
 
 const ext  = f => { const d = (f || '').lastIndexOf('.'); return d >= 0 ? f.slice(d).toLowerCase() : ''; };
 const libUrl = f => `/lib/${f.split('/').map(encodeURIComponent).join('/')}`;
+const sfxUrl = f => `/sfx/${f.split('/').map(encodeURIComponent).join('/')}`;
 const isVideo = f => VIDEO_EXTS.has(ext(f));
 
 function nextId(sentences) {
@@ -374,6 +376,7 @@ function sentenceRowHtml(s, i) {
             ${sfxOpts.map(f => `<option value="${esc(f)}"${curSfx === f ? ' selected' : ''}>${esc(f)}</option>`).join('')}
           </select>
           ${s.sound_effect ? `
+            <button class="btn sec ssfxplay" data-si="${i}" title="Play sound effect" style="padding:5px 8px">▶</button>
             <input class="inp ssfxofs" type="number" data-si="${i}"
               value="${s.sfx_offset ?? 0}" min="0" step="0.1" style="width:72px" placeholder="s offset">
           ` : ''}
@@ -410,6 +413,18 @@ function thumbColHtml(file, slot, si, isSel) {
 }
 
 function handleSentenceClick(e) {
+  const playSfx = e.target.closest('.ssfxplay');
+  if (playSfx) {
+    const s = S.scriptData?.sentences?.[+playSfx.dataset.si];
+    if (s?.sound_effect) {
+      sfxAudio.pause();
+      sfxAudio.currentTime = 0;
+      sfxAudio.src = sfxUrl(s.sound_effect);
+      sfxAudio.play().catch(err => console.warn('SFX playback failed:', err));
+    }
+    return;
+  }
+
   const del = e.target.closest('.sdel');
   if (del) {
     const i = +del.dataset.si;
