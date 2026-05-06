@@ -45,6 +45,7 @@ const S = {
   sel: null,        // selected sentence index
   slot: 'image',   // 'image' | 'image2' | 'overlay_image'
   search: '',
+  activeTags: new Set(),
   typeFilter: 'all',
   page: 0,
   saveStatus: '',
@@ -106,6 +107,12 @@ function filteredClips() {
   if (S.typeFilter !== 'all') {
     const allowed = TYPE_FILTER_EXTS[S.typeFilter];
     clips = clips.filter(c => allowed.has(ext(c.file || '')));
+  }
+  if (S.activeTags.size) {
+    clips = clips.filter(c => {
+      const clipTags = new Set((c.tags || []).map(t => t.toLowerCase()));
+      return [...S.activeTags].some(t => clipTags.has(t));
+    });
   }
   const terms = S.search.split(/\s+/).filter(Boolean).map(t => t.toLowerCase());
   if (terms.length) {
@@ -642,14 +649,10 @@ function renderPicker() {
   };
 
   // Top tags
-  const tags = topTags(20);
-  const active = new Set(S.search.split(/\s+/).filter(Boolean).map(t => t.toLowerCase()));
+  const tags = topTags(60);
   const tagHtml = tags.length ? `
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
-      ${tags.slice(0, 10).map(t => `<button class="btn ${active.has(t.toLowerCase()) ? 'pri' : 'sec'} tagbtn" data-tag="${esc(t)}" style="padding:2px 8px;font-size:0.78em">${esc(t)}</button>`).join('')}
-    </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-      ${tags.slice(10).map(t => `<button class="btn ${active.has(t.toLowerCase()) ? 'pri' : 'sec'} tagbtn" data-tag="${esc(t)}" style="padding:2px 8px;font-size:0.78em">${esc(t)}</button>`).join('')}
+      ${tags.map(t => `<button class="btn ${S.activeTags.has(t.toLowerCase()) ? 'pri' : 'sec'} tagbtn" data-tag="${esc(t)}" style="padding:2px 8px;font-size:0.78em">${esc(t)}</button>`).join('')}
     </div>
   ` : '';
 
@@ -716,19 +719,13 @@ function handlePickerClick(e) {
 
   const tag = e.target.closest('.tagbtn');
   if (tag) {
-    const terms = new Set(S.search.split(/\s+/).filter(Boolean).map(t => t.toLowerCase()));
     const t = tag.dataset.tag.toLowerCase();
-    terms.has(t) ? terms.delete(t) : terms.add(t);
-    S.search = [...terms].sort().join(' ');
+    S.activeTags.has(t) ? S.activeTags.delete(t) : S.activeTags.add(t);
     S.page = 0;
-    // Sync search input
-    const inp = document.getElementById('picker-search');
-    if (inp) inp.value = S.search;
-    // Update tag button styles
     document.querySelectorAll('.tagbtn').forEach(btn => {
       const bt = btn.dataset.tag.toLowerCase();
-      btn.classList.toggle('pri', terms.has(bt));
-      btn.classList.toggle('sec', !terms.has(bt));
+      btn.classList.toggle('pri', S.activeTags.has(bt));
+      btn.classList.toggle('sec', !S.activeTags.has(bt));
     });
     refreshClipGrid();
     return;
@@ -860,6 +857,7 @@ async function loadScript(name) {
   ensureIds(S.scriptData.sentences);
   S.sel = null;
   S.search = '';
+  S.activeTags = new Set();
   S.typeFilter = 'all';
   S.page = 0;
 }
