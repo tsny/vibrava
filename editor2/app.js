@@ -438,7 +438,8 @@ function handleSentenceClick(e) {
     const s = S.scriptData?.sentences?.[i];
     const text = s?.text?.trim();
     if (!text) return;
-    const voiceId = s.voice_id || S.scriptData?.voice_id || '';
+    const voiceInput = document.querySelector(`.svoice[data-si="${i}"]`);
+    const voiceId = voiceInput?.value?.trim() || S.scriptData?.voice_id || '';
     playTts.textContent = '⏳';
     playTts.disabled = true;
     fetch('/api/tts', {
