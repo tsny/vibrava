@@ -383,8 +383,10 @@ function sentenceRowHtml(s, i) {
             <input class="inp ssfxdur" type="number" data-si="${i}"
               value="${s.sfx_duration ?? ''}" min="0" step="0.1" style="width:72px" placeholder="dur s">
           ` : ''}
-          <input class="inp svoice" type="text" data-si="${i}"
-            value="${esc(s.voice_id || '')}" placeholder="voice ID override" style="flex:1;min-width:100px">
+          <select class="inp svoice" data-si="${i}" style="flex:1;min-width:120px">
+            <option value="">— voice default —</option>
+            ${ELEVENLABS_VOICES.map(([id, name]) => `<option value="${esc(id)}"${s.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
+          </select>
           <input class="inp spause" type="number" data-si="${i}"
             value="${s.pause_duration ?? ''}" min="0" step="0.1" style="width:72px" placeholder="pause s">
         </div>
@@ -541,7 +543,6 @@ function handleSentenceInput(e) {
   if (e.target.classList.contains('stxt'))     s.text = e.target.value;
   if (e.target.classList.contains('ssfxofs'))  s.sfx_offset = parseFloat(e.target.value) || 0;
   if (e.target.classList.contains('ssfxdur'))  { const v = parseFloat(e.target.value); s.sfx_duration = isNaN(v) || e.target.value === '' ? null : v; }
-  if (e.target.classList.contains('svoice'))   s.voice_id = e.target.value || null;
   if (e.target.classList.contains('spause'))   { const v = parseFloat(e.target.value); s.pause_duration = isNaN(v) ? null : v; }
   if (e.target.classList.contains('sovopa'))   { const v = parseFloat(e.target.value); s.overlay_opacity = isNaN(v) ? 1.0 : Math.max(0, Math.min(1, v)); }
   if (e.target.classList.contains('sovsize'))  { const v = parseFloat(e.target.value); s.overlay_size = isNaN(v) ? 1/3 : Math.max(1, Math.min(100, v)) / 100; }
@@ -553,6 +554,11 @@ function handleSentenceChange(e) {
   const i = +si;
   const s = S.scriptData.sentences[i];
   if (!s) return;
+
+  if (e.target.classList.contains('svoice')) {
+    s.voice_id = e.target.value || null;
+    return;
+  }
 
   if (e.target.classList.contains('ssfx')) {
     s.sound_effect = e.target.value === '(none)' ? null : e.target.value;
