@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Minimal HTTP server for the Vibrava script editor frontend."""
+import base64
+import hashlib
 import io
 import json
 import mimetypes
+import os
 import sys
 import tomllib
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -28,6 +31,12 @@ def load_config() -> dict:
 CONFIG = load_config()
 LIBRARY_PATH = Path(CONFIG.get("library", {}).get("path", "res")).resolve()
 SFX_PATH = Path(CONFIG.get("sfx", {}).get("path", "sfx")).resolve()
+CACHE_PATH = Path(CONFIG.get("cache", {}).get("path", "cache")).resolve()
+
+_EL_CFG = CONFIG.get("elevenlabs", {})
+EL_API_KEY = os.environ.get("ELEVENLABS_API_KEY") or _EL_CFG.get("api_key", "")
+EL_MODEL_ID = _EL_CFG.get("model_id", "eleven_multilingual_v2")
+EL_DEFAULT_VOICE = _EL_CFG.get("default_voice_id", "")
 
 _FONT_CANDIDATES = [
     "/System/Library/Fonts/Helvetica.ttc",
@@ -218,7 +227,37 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length))
 
-        if path == "/api/script":
+        if path == "/api/tts":
+            text = body.get("text", "").strip()
+            voice_id = body.get("voice_id", "").strip() or EL_DEFAULT_VOICE
+            if not text:
+                return self._err(400, "missing text")
+            if not EL_API_KEY:
+                return self._err(503, "ELEVENLABS_API_KEY not configured")
+            cache_key = hashlib.md5(f"{text}|{voice_id}|{EL_MODEL_ID}".encode()).hexdigest()
+            cache_dir = CACHE_PATH / "tts"
+            audio_path = cache_dir / f"{cache_key}.mp3"
+            if not audio_path.exists():
+                try:
+                    from elevenlabs.client import ElevenLabs
+                    client = ElevenLabs(api_key=EL_API_KEY)
+                    response = client.text_to_speech.convert_with_timestamps(
+                        voice_id=voice_id,
+                        text=text,
+                        model_id=EL_MODEL_ID,
+                    )
+                    audio_bytes = base64.b64decode(response.audio_base_64)
+                    cache_dir.mkdir(parents=True, exist_ok=True)
+                    audio_path.write_bytes(audio_bytes)
+                except Exception as e:
+                    return self._err(500, str(e))
+            audio_data = audio_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/mpeg")
+            self.send_header("Content-Length", len(audio_data))
+            self.end_headers()
+            self.wfile.write(audio_data)
+        elif path == "/api/script":
             name = qs.get("name", [None])[0]
             if not name:
                 return self._err(400, "missing name")

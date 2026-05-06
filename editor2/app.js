@@ -38,7 +38,7 @@ const S = {
   clips: [],
   sfxFiles: [],
   sel: null,        // selected sentence index
-  slot: 'image',   // 'image' | 'image2'
+  slot: 'image',   // 'image' | 'image2' | 'overlay_image'
   search: '',
   typeFilter: 'all',
   page: 0,
@@ -48,6 +48,7 @@ const S = {
 const videoCache = new Map();
 const imgBlobCache = new Map(); // file → blob URL
 const sfxAudio = new Audio();
+const ttsAudio = new Audio();
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
@@ -387,10 +388,23 @@ function sentenceRowHtml(s, i) {
           <input class="inp spause" type="number" data-si="${i}"
             value="${s.pause_duration ?? ''}" min="0" step="0.1" style="width:72px" placeholder="pause s">
         </div>
+        ${s.overlay_image ? `
+        <div class="srow-meta" style="margin-top:4px">
+          <span style="color:var(--muted);font-size:0.8em;white-space:nowrap">overlay:</span>
+          <input class="inp sovopa" type="number" data-si="${i}"
+            value="${s.overlay_opacity ?? 1}" min="0" max="1" step="0.05" style="width:72px" title="Opacity (0–1)">
+          <span style="color:var(--muted);font-size:0.8em">opacity</span>
+          <input class="inp sovsize" type="number" data-si="${i}"
+            value="${Math.round((s.overlay_size ?? 1/3) * 100)}" min="1" max="100" step="1" style="width:64px" title="Size % of video width">
+          <span style="color:var(--muted);font-size:0.8em">size %</span>
+        </div>
+        ` : ''}
       </div>
       ${thumbColHtml(s.image, 'image', i, isSel)}
       ${thumbColHtml(s.image2, 'image2', i, isSel)}
+      ${thumbColHtml(s.overlay_image, 'overlay_image', i, isSel)}
       <div style="display:flex;flex-direction:column;gap:4px;align-self:flex-start;margin-top:4px">
+        <button class="btn sec sttsplay" data-si="${i}" title="Preview TTS" style="padding:4px 8px">🔊</button>
         <button class="btn sec sdup" data-si="${i}" title="Duplicate" style="padding:4px 8px">⧉</button>
         <button class="btn sec sdel" data-si="${i}" title="Remove" style="padding:4px 8px">✕</button>
       </div>
@@ -400,7 +414,7 @@ function sentenceRowHtml(s, i) {
 
 function thumbColHtml(file, slot, si, isSel) {
   const isActive = isSel && S.slot === slot;
-  const label = slot === 'image' ? '1️⃣' : '2️⃣';
+  const label = slot === 'image' ? '1️⃣' : slot === 'image2' ? '2️⃣' : '🔲';
   let img;
   if (file && isVideo(file)) {
     img = `<div class="thumb" data-video-thumb="${esc(file)}" style="width:72px;height:72px"></div>`;
@@ -418,6 +432,36 @@ function thumbColHtml(file, slot, si, isSel) {
 }
 
 function handleSentenceClick(e) {
+  const playTts = e.target.closest('.sttsplay');
+  if (playTts) {
+    const i = +playTts.dataset.si;
+    const s = S.scriptData?.sentences?.[i];
+    const text = s?.text?.trim();
+    if (!text) return;
+    const voiceId = s.voice_id || S.scriptData?.voice_id || '';
+    playTts.textContent = '⏳';
+    playTts.disabled = true;
+    fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice_id: voiceId }),
+    }).then(r => {
+      if (!r.ok) return r.json().then(d => { throw new Error(d.error || r.status); });
+      return r.blob();
+    }).then(blob => {
+      const url = URL.createObjectURL(blob);
+      ttsAudio.pause();
+      ttsAudio.src = url;
+      ttsAudio.play().catch(err => console.warn('TTS playback failed:', err));
+    }).catch(err => {
+      alert('TTS failed: ' + err.message);
+    }).finally(() => {
+      playTts.textContent = '🔊';
+      playTts.disabled = false;
+    });
+    return;
+  }
+
   const playSfx = e.target.closest('.ssfxplay');
   if (playSfx) {
     const s = S.scriptData?.sentences?.[+playSfx.dataset.si];
@@ -498,6 +542,8 @@ function handleSentenceInput(e) {
   if (e.target.classList.contains('ssfxdur'))  { const v = parseFloat(e.target.value); s.sfx_duration = isNaN(v) || e.target.value === '' ? null : v; }
   if (e.target.classList.contains('svoice'))   s.voice_id = e.target.value || null;
   if (e.target.classList.contains('spause'))   { const v = parseFloat(e.target.value); s.pause_duration = isNaN(v) ? null : v; }
+  if (e.target.classList.contains('sovopa'))   { const v = parseFloat(e.target.value); s.overlay_opacity = isNaN(v) ? 1.0 : Math.max(0, Math.min(1, v)); }
+  if (e.target.classList.contains('sovsize'))  { const v = parseFloat(e.target.value); s.overlay_size = isNaN(v) ? 1/3 : Math.max(1, Math.min(100, v)) / 100; }
 }
 
 function handleSentenceChange(e) {
@@ -559,7 +605,7 @@ function renderPicker() {
 
   const noSel = S.sel === null || S.sel >= S.scriptData.sentences.length;
   const s = noSel ? null : S.scriptData.sentences[S.sel];
-  const slotLabel = S.slot === 'image' ? 'Image 1' : 'Image 2 (½ way)';
+  const slotLabel = S.slot === 'image' ? 'Image 1' : S.slot === 'image2' ? 'Image 2 (½ way)' : 'Overlay Image';
 
   const headerHtml = noSel
     ? `<div class="panel-header"><span class="muted">Select a sentence to assign images</span>
@@ -619,6 +665,7 @@ function renderPicker() {
     <div class="cur-thumbs">
       ${curThumb(s?.image, 'image', 'Image 1')}
       ${curThumb(s?.image2, 'image2', 'Image 2')}
+      ${curThumb(s?.overlay_image, 'overlay_image', 'Overlay')}
     </div>
     <div class="hr"></div>
     ${tagHtml}
@@ -690,12 +737,21 @@ function handlePickerClick(e) {
   const asgn = e.target.closest('.asgn');
   if (asgn && S.sel !== null && !asgn.hasAttribute('data-disabled') && !asgn.disabled) {
     const file = asgn.dataset.file;
+    const hadOverlay = !!S.scriptData.sentences[S.sel].overlay_image;
     S.scriptData.sentences[S.sel][S.slot] = file;
-    // Update thumbnail in sentence row without re-rendering the list
-    const thumbCol = document.querySelector(`.sthumb[data-slot="${S.slot}"][data-si="${S.sel}"]`);
-    if (thumbCol) {
-      thumbCol.outerHTML = thumbColHtml(file, S.slot, S.sel, true);
-      fillVideoThumbs(document.getElementById('sentences-panel'));
+    if (S.slot === 'overlay_image' && !hadOverlay) {
+      // Re-render the row to show the new overlay controls
+      const row = document.querySelector(`.srow[data-si="${S.sel}"]`);
+      if (row) {
+        row.outerHTML = sentenceRowHtml(S.scriptData.sentences[S.sel], S.sel);
+        fillVideoThumbs(document.getElementById('sentences-panel'));
+      }
+    } else {
+      const thumbCol = document.querySelector(`.sthumb[data-slot="${S.slot}"][data-si="${S.sel}"]`);
+      if (thumbCol) {
+        thumbCol.outerHTML = thumbColHtml(file, S.slot, S.sel, true);
+        fillVideoThumbs(document.getElementById('sentences-panel'));
+      }
     }
     renderPicker();
     return;
@@ -705,9 +761,18 @@ function handlePickerClick(e) {
   if (clr && S.sel !== null) {
     const slot = clr.dataset.slot;
     S.scriptData.sentences[S.sel][slot] = null;
-    const thumbCol = document.querySelector(`.sthumb[data-slot="${slot}"][data-si="${S.sel}"]`);
-    if (thumbCol) {
-      thumbCol.outerHTML = thumbColHtml(null, slot, S.sel, true);
+    if (slot === 'overlay_image') {
+      // Re-render the row to remove the overlay controls
+      const row = document.querySelector(`.srow[data-si="${S.sel}"]`);
+      if (row) {
+        row.outerHTML = sentenceRowHtml(S.scriptData.sentences[S.sel], S.sel);
+        fillVideoThumbs(document.getElementById('sentences-panel'));
+      }
+    } else {
+      const thumbCol = document.querySelector(`.sthumb[data-slot="${slot}"][data-si="${S.sel}"]`);
+      if (thumbCol) {
+        thumbCol.outerHTML = thumbColHtml(null, slot, S.sel, true);
+      }
     }
     renderPicker();
   }

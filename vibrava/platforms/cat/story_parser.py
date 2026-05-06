@@ -14,6 +14,9 @@ class Sentence:
     image2: str | None = None  # shown at the halfway point of the sentence
     voice_id: str | None = None  # overrides top-level voice_id when set
     pause_duration: float | None = None  # overrides script/config pause when set
+    overlay_image: str | None = None   # per-sentence overlay image (relative to library root)
+    overlay_opacity: float = 1.0       # 0.0–1.0; alpha ramps up to this over the first half of the sentence
+    overlay_size: float = 1/3          # fraction of video width
 
 
 @dataclass
@@ -74,6 +77,9 @@ def parse(path: Path) -> VideoScript:
             image2=s.get("image2"),
             voice_id=s.get("voice_id") or None,
             pause_duration=float(s["pause_duration"]) if s.get("pause_duration") is not None else None,
+            overlay_image=s.get("overlay_image"),
+            overlay_opacity=float(s.get("overlay_opacity", 1.0)),
+            overlay_size=float(s.get("overlay_size", 1/3)),
         )
         for s in data["sentences"]
     ]

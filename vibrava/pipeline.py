@@ -82,6 +82,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     audio_map = {}
     image_map: dict[str, list[Path | None]] = {}
     sfx_map: dict[str, tuple[Path, float, float | None] | None] = {}
+    sentence_overlay_map: dict[str, tuple[Path, float, float] | None] = {}
 
     mood_provider = _resolve_mood_provider()
     mood_enabled = mood_provider is not None
@@ -176,6 +177,22 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
             warn = " [warn]" if sfx_label.startswith("NOT FOUND") else ""
             print(f"        sfx    {sfx_label}{warn}")
 
+        if sentence.overlay_image:
+            ov_path = index.library_dir / sentence.overlay_image
+            if ov_path.exists():
+                sentence_overlay_map[sentence.id] = (
+                    ov_path,
+                    sentence.overlay_opacity,
+                    sentence.overlay_size,
+                )
+                ov_label = f"{sentence.overlay_image}  opacity={sentence.overlay_opacity}"
+                print(f"        overlay {ov_label}")
+            else:
+                sentence_overlay_map[sentence.id] = None
+                print(f"        overlay [NOT FOUND]: {sentence.overlay_image}")
+        else:
+            sentence_overlay_map[sentence.id] = None
+
     if output_path is None:
         ts = datetime.now().strftime("%m%d-%H%M")
         stem = Path(script.output_filename).stem
@@ -201,6 +218,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
         audio_map=audio_map,
         image_map=image_map,
         sfx_map=sfx_map,
+        sentence_overlay_map=sentence_overlay_map,
         overlay_image_path=overlay_image_path,
         overlay_image_size=script.overlay_image_size,
         output_path=output_path,

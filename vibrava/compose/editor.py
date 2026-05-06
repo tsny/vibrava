@@ -226,15 +226,46 @@ def _make_gif_clip(gif_path: Path, width: int, height: int, duration: float):
 # Overlay image
 # ---------------------------------------------------------------------------
 
-def _make_overlay_clip(overlay_path: Path, width: int, height: int, duration: float, size_frac: float = 1/6, padding: int = 20) -> ImageClip:
+def _make_overlay_clip(
+    overlay_path: Path,
+    width: int,
+    height: int,
+    duration: float,
+    size_frac: float = 1/6,
+    padding: int = 20,
+    opacity: float = 1.0,
+    fade_in: float = 0.0,
+    centered: bool = False,
+) -> ImageClip:
+    from moviepy.editor import VideoClip as _VideoClip
+
     img = Image.open(overlay_path).convert("RGBA")
     max_dim = max(1, int(width * size_frac))
     scale = min(max_dim / img.width, max_dim / img.height, 1.0)
     new_w, new_h = int(img.width * scale), int(img.height * scale)
     img = img.resize((new_w, new_h), Image.LANCZOS)
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    canvas.paste(img, (padding, height - new_h - padding), img)
-    return ImageClip(np.array(canvas), ismask=False).set_duration(duration)
+    if centered:
+        x, y = (width - new_w) // 2, (height - new_h) // 2
+    else:
+        x, y = padding, height - new_h - padding
+    canvas.paste(img, (x, y), img)
+    clip = ImageClip(np.array(canvas), ismask=False).set_duration(duration)
+
+    if opacity < 1.0 or fade_in > 0.0:
+        clip = clip.set_opacity(opacity)
+        if fade_in > 0.0:
+            base_mask = clip.mask
+
+            def _fade_frame(t):
+                factor = min(t / fade_in, 1.0)
+                return base_mask.get_frame(t) * factor
+
+            clip = clip.set_mask(
+                _VideoClip(_fade_frame, ismask=True).set_duration(duration)
+            )
+
+    return clip
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +296,7 @@ def build(
     pause_duration: float,
     caption_style: str,
     sfx_map: dict[str, tuple[Path, float] | None] | None = None,
+    sentence_overlay_map: dict[str, tuple[Path, float, float] | None] | None = None,
     overlay_image_path: Path | None = None,
     overlay_image_size: float = 1/6,
     music_path: Path | None = None,
@@ -351,6 +383,18 @@ def build(
                     )
                     caption_clips.append(wclip)
                 video_clip = CompositeVideoClip([video_clip] + caption_clips)
+
+        # Per-sentence overlay — centered, alpha ramps to target by the midpoint
+        ov_entry = (sentence_overlay_map or {}).get(sentence.id)
+        if ov_entry:
+            ov_path, ov_opacity, ov_size = ov_entry
+            ov_clip = _make_overlay_clip(
+                ov_path, width, height, total_duration,
+                size_frac=ov_size, opacity=ov_opacity,
+                fade_in=total_duration / 2,
+                centered=True,
+            )
+            video_clip = CompositeVideoClip([video_clip, ov_clip])
 
         clips.append(video_clip)
 
