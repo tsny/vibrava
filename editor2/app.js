@@ -46,6 +46,7 @@ const S = {
 };
 
 const videoCache = new Map();
+const imgBlobCache = new Map(); // file → blob URL
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,26 @@ function filteredClips() {
 }
 
 // ─── Video thumbnails ────────────────────────────────────────────────────────
+
+async function getImgBlobUrl(file) {
+  if (imgBlobCache.has(file)) return imgBlobCache.get(file);
+  try {
+    const r = await fetch(libUrl(file));
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    imgBlobCache.set(file, url);
+    return url;
+  } catch { return null; }
+}
+
+async function fillImgBlobUrls(container) {
+  const imgs = [...container.querySelectorAll('img[data-file]')];
+  await Promise.all(imgs.map(async img => {
+    const url = await getImgBlobUrl(img.dataset.file);
+    if (url) img.src = url;
+  }));
+}
 
 async function getVideoThumb(file) {
   if (videoCache.has(file)) return videoCache.get(file);
@@ -440,7 +461,7 @@ function handleSentenceChange(e) {
 
 // ─── Picker panel ────────────────────────────────────────────────────────────
 
-function clipGridHtml(clips, curFile) {
+function clipGridHtml(clips, curFile, disabled = false) {
   if (!clips.length) {
     return `<p class="muted">${S.search ? 'No clips match.' : 'No clips in library.'}</p>`;
   }
@@ -452,13 +473,15 @@ function clipGridHtml(clips, curFile) {
   let html = '';
   for (let i = 0; i < pageClips.length; i += COLS) {
     const cells = pageClips.slice(i, i + COLS).map(clip => {
-      const isCur = curFile === clip.file;
+      const isCur = !disabled && curFile === clip.file;
+      const cachedSrc = !isVideo(clip.file) && imgBlobCache.get(clip.file);
       const thumb = isVideo(clip.file)
         ? `<div class="clip-thumb" data-video-thumb="${esc(clip.file)}"></div>`
-        : `<img src="${libUrl(clip.file)}" loading="lazy" class="clip-thumb">`;
+        : `<img src="${cachedSrc || ''}" data-file="${esc(clip.file)}" loading="lazy" class="clip-thumb">`;
       return `<div class="clip-cell">
         ${thumb}
         <button class="btn ${isCur ? 'pri' : 'sec'} asgn" data-file="${esc(clip.file)}"
+          ${disabled ? 'disabled' : ''}
           style="width:100%;margin-top:3px;font-size:0.68em;padding:2px 3px;overflow:hidden;text-overflow:ellipsis"
           title="${esc(clip.file)}">${isCur ? '✓ ' : ''}${esc(clip.file)}</button>
       </div>`;
@@ -470,18 +493,25 @@ function clipGridHtml(clips, curFile) {
 
 function renderPicker() {
   const panel = document.getElementById('picker-panel');
-  if (S.sel === null || !S.scriptData) {
-    panel.innerHTML = '<p class="muted center">Click 1️⃣ or 2️⃣ next to a sentence to pick its image.</p>';
+  if (!S.scriptData) {
+    panel.innerHTML = '<p class="muted center">Open a script from the sidebar.</p>';
     return;
   }
-  const sentences = S.scriptData.sentences;
-  if (S.sel >= sentences.length) { S.sel = null; panel.innerHTML = ''; return; }
 
-  const s = sentences[S.sel];
+  const noSel = S.sel === null || S.sel >= S.scriptData.sentences.length;
+  const s = noSel ? null : S.scriptData.sentences[S.sel];
   const slotLabel = S.slot === 'image' ? 'Image 1' : 'Image 2 (½ way)';
-  const preview = (s.text || '').slice(0, 60);
+
+  const headerHtml = noSel
+    ? `<div class="panel-header"><span class="muted">Select a sentence to assign images</span>
+        <button class="btn sec" id="preview-btn" style="margin-left:auto;white-space:nowrap" disabled>🖼 Preview</button></div>`
+    : `<div class="panel-header" style="display:flex;align-items:center;gap:10px">
+        <span><strong>Sentence ${S.sel + 1}</strong> — <em style="color:#aaa">${esc((s.text || '').slice(0, 60))}</em> · picking <strong>${esc(slotLabel)}</strong></span>
+        <button class="btn sec" id="preview-btn" style="margin-left:auto;white-space:nowrap">🖼 Preview</button>
+      </div>`;
 
   const curThumb = (file, slotKey, lbl) => {
+    if (noSel) return `<div class="cur-thumb"><p class="lbl">${esc(lbl)}</p><p class="muted" style="font-size:0.82em">—</p></div>`;
     if (!file) return `<div class="cur-thumb"><p class="lbl">${esc(lbl)}</p><p class="muted" style="font-size:0.82em">None</p></div>`;
     const img = isVideo(file)
       ? `<div class="thumb" data-video-thumb="${esc(file)}" style="width:96px;height:96px"></div>`
@@ -517,55 +547,54 @@ function renderPicker() {
   const page = Math.min(S.page, totalPages - 1);
   S.page = page;
 
-  const pager = totalPages > 1 ? `
+  const makePager = (suffix) => totalPages > 1 ? `
     <div class="pager">
-      <button class="btn sec" id="pgprev" ${page === 0 ? 'disabled' : ''}>← Prev</button>
+      <button class="btn sec" id="pgprev${suffix}" ${page === 0 ? 'disabled' : ''}>← Prev</button>
       <span>Page ${page + 1} / ${totalPages} · ${clips.length} clips</span>
-      <button class="btn sec" id="pgnext" ${page >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+      <button class="btn sec" id="pgnext${suffix}" ${page >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
     </div>
   ` : `<p class="muted" style="margin-top:6px;font-size:0.8em">${clips.length} clips</p>`;
 
   panel.innerHTML = `
-    <div class="panel-header" style="display:flex;align-items:center;gap:10px">
-      <span><strong>Sentence ${S.sel + 1}</strong> — <em style="color:#aaa">${esc(preview)}</em> · picking <strong>${esc(slotLabel)}</strong></span>
-      <button class="btn sec" id="preview-btn" style="margin-left:auto;white-space:nowrap">🖼 Preview</button>
-    </div>
+    ${headerHtml}
     <div class="cur-thumbs">
-      ${curThumb(s.image, 'image', 'Image 1')}
-      ${curThumb(s.image2, 'image2', 'Image 2')}
+      ${curThumb(s?.image, 'image', 'Image 1')}
+      ${curThumb(s?.image2, 'image2', 'Image 2')}
     </div>
     <div class="hr"></div>
     ${tagHtml}
     <input id="picker-search" class="inp" type="text" placeholder="tag or filename…" value="${esc(S.search)}" style="width:100%;margin-bottom:8px">
     ${typeHtml}
-    <div id="clip-grid">${clipGridHtml(clips, s[S.slot])}</div>
-    ${pager}
+    ${makePager('-top')}
+    <div id="clip-grid">${clipGridHtml(clips, s?.[S.slot], noSel)}</div>
+    ${makePager('-bot')}
   `;
 
   fillVideoThumbs(panel);
+  fillImgBlobUrls(panel);
 }
 
 function refreshClipGrid() {
   const grid = document.getElementById('clip-grid');
-  if (!grid || S.sel === null) return;
+  if (!grid) return;
+  const noSel = S.sel === null || S.sel >= (S.scriptData?.sentences?.length ?? 0);
   const clips = filteredClips();
-  const curFile = S.scriptData?.sentences[S.sel]?.[S.slot];
-  grid.innerHTML = clipGridHtml(clips, curFile);
+  const curFile = noSel ? null : S.scriptData?.sentences[S.sel]?.[S.slot];
+  grid.innerHTML = clipGridHtml(clips, curFile, noSel);
   fillVideoThumbs(grid);
+  fillImgBlobUrls(grid);
 
   // Refresh pagination
   const totalPages = Math.max(1, Math.ceil(clips.length / PAGE_SIZE));
   const page = S.page;
-  const prev = document.getElementById('pgprev');
-  const next = document.getElementById('pgnext');
-  if (prev) prev.disabled = page === 0;
-  if (next) next.disabled = page >= totalPages - 1;
+  for (const id of ['pgprev-top', 'pgprev-bot']) { const el = document.getElementById(id); if (el) el.disabled = page === 0; }
+  for (const id of ['pgnext-top', 'pgnext-bot']) { const el = document.getElementById(id); if (el) el.disabled = page >= totalPages - 1; }
 }
 
 function handlePickerClick(e) {
   if (e.target.matches('#preview-btn')) { handlePreview(); return; }
-  if (e.target.matches('#pgprev')) { S.page = Math.max(0, S.page - 1); refreshClipGrid(); return; }
-  if (e.target.matches('#pgnext')) { S.page++; refreshClipGrid(); return; }
+  if (e.target.matches('#pgprev-top,#pgprev-bot')) { S.page = Math.max(0, S.page - 1); refreshClipGrid(); return; }
+  if (e.target.matches('#pgnext-top,#pgnext-bot')) { S.page++; refreshClipGrid(); return; }
 
   const tag = e.target.closest('.tagbtn');
   if (tag) {

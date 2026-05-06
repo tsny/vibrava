@@ -21,6 +21,7 @@ TYPE_FILTER_EXTS: dict[str, set[str]] = {
 }
 THUMB_SMALL = 80
 THUMB_PICK = 100
+THUMB_PREVIEW = 120
 
 ELEVENLABS_VOICES = [
     ("CwhRBWXzGAHq8TQ4Fs17", "Roger - Laid-Back, Casual, Resonant"),
@@ -248,7 +249,7 @@ with st.sidebar:
 
     # Script picker
     scripts_dir = Path("scripts")
-    script_files = sorted(f for f in scripts_dir.glob("*.json") if scripts_dir.exists())
+    script_files = sorted(scripts_dir.glob("*.json")) if scripts_dir.exists() else []
 
     if script_files:
         names = [f.name for f in script_files]
@@ -258,13 +259,14 @@ with st.sidebar:
             else names[0]
         )
         idx = names.index(current) if current in names else 0
-        chosen = st.selectbox("Script", names, index=idx)
-        if st.button("Open", use_container_width=True):
-            open_script(scripts_dir / chosen)
-            st.rerun()
+
+        def _on_script_select():
+            open_script(scripts_dir / st.session_state._script_select)
+
+        st.selectbox("Script", names, index=idx, key="_script_select", on_change=_on_script_select)
     else:
         custom = st.text_input("Script path", placeholder="scripts/my_script.json")
-        if custom and st.button("Open", use_container_width=True):
+        if custom:
             p = Path(custom)
             if p.exists():
                 open_script(p)
@@ -501,9 +503,6 @@ with left_col:
                         else:
                             if st.session_state.selected_sentence != i:
                                 st.session_state.picker_page = 0
-                                st.session_state.picker_search = ""
-                                st.session_state.picker_search_input = ""
-                                st.session_state.picker_type_filter = "all"
                             st.session_state.selected_sentence = i
                             st.session_state.picker_slot = slot
                         st.rerun()
@@ -561,12 +560,12 @@ with right_col:
         with col:
             st.caption(lbl)
             if path and path.suffix.lower() in VIDEO_EXTENSIONS:
-                thumb = make_video_thumbnail(path, 120)
+                thumb = make_video_thumbnail(path, THUMB_PREVIEW)
                 if thumb:
-                    st.image(thumb, width=120)
+                    st.image(thumb, width=THUMB_PREVIEW)
                 st.caption(sentence.get(key, ""))
             elif path:
-                st.image(open_image(path), width=120)
+                st.image(open_image(path), width=THUMB_PREVIEW)
                 st.caption(sentence.get(key, ""))
                 if st.button(f"✕ Clear {lbl}", key=f"clear_{key}_{sel}"):
                     sentences[sel][key] = None
@@ -664,6 +663,19 @@ with right_col:
         st.session_state.picker_page = page
         page_clips = clips[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
 
+        if total_pages > 1:
+            nav_cols = st.columns([1, 2, 1])
+            with nav_cols[0]:
+                if st.button("← Prev", key="nav_top_prev", disabled=page == 0, use_container_width=True):
+                    st.session_state.picker_page -= 1
+                    st.rerun()
+            with nav_cols[1]:
+                st.caption(f"Page {page + 1} of {total_pages} · {len(clips)} clips")
+            with nav_cols[2]:
+                if st.button("Next →", key="nav_top_next", disabled=page >= total_pages - 1, use_container_width=True):
+                    st.session_state.picker_page += 1
+                    st.rerun()
+
         for row_start in range(0, len(page_clips), COLS):
             cols = st.columns(COLS)
             for col_idx, clip in enumerate(page_clips[row_start : row_start + COLS]):
@@ -709,14 +721,12 @@ with right_col:
         if total_pages > 1:
             nav_cols = st.columns([1, 2, 1])
             with nav_cols[0]:
-                if st.button("← Prev", disabled=page == 0, use_container_width=True):
+                if st.button("← Prev", key="nav_bot_prev", disabled=page == 0, use_container_width=True):
                     st.session_state.picker_page -= 1
                     st.rerun()
             with nav_cols[1]:
                 st.caption(f"Page {page + 1} of {total_pages} · {len(clips)} clips")
             with nav_cols[2]:
-                if st.button(
-                    "Next →", disabled=page >= total_pages - 1, use_container_width=True
-                ):
+                if st.button("Next →", key="nav_bot_next", disabled=page >= total_pages - 1, use_container_width=True):
                     st.session_state.picker_page += 1
                     st.rerun()

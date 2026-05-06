@@ -235,15 +235,17 @@ class Handler(BaseHTTPRequestHandler):
         target = (base / rel).resolve()
         if not str(target).startswith(str(base)):
             return self._err(403, "forbidden")
-        self._file(target, mimetypes.guess_type(str(target))[0] or "application/octet-stream")
+        self._file(target, mimetypes.guess_type(str(target))[0] or "application/octet-stream", cache=True)
 
-    def _file(self, p: Path, mime: str):
+    def _file(self, p: Path, mime: str, cache: bool = False):
         if not p.exists():
             return self._err(404, "not found")
         data = p.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", len(data))
+        if cache:
+            self.send_header("Cache-Control", "public, max-age=86400")
         self.end_headers()
         self.wfile.write(data)
 
