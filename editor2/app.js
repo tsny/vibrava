@@ -378,7 +378,9 @@ function sentenceRowHtml(s, i) {
           ${s.sound_effect ? `
             <button class="btn sec ssfxplay" data-si="${i}" title="Play sound effect" style="padding:5px 8px">▶</button>
             <input class="inp ssfxofs" type="number" data-si="${i}"
-              value="${s.sfx_offset ?? 0}" min="0" step="0.1" style="width:72px" placeholder="s offset">
+              value="${s.sfx_offset ?? 0}" min="0" step="0.1" style="width:72px" placeholder="offset s">
+            <input class="inp ssfxdur" type="number" data-si="${i}"
+              value="${s.sfx_duration ?? ''}" min="0" step="0.1" style="width:72px" placeholder="dur s">
           ` : ''}
           <input class="inp svoice" type="text" data-si="${i}"
             value="${esc(s.voice_id || '')}" placeholder="voice ID override" style="flex:1;min-width:100px">
@@ -478,6 +480,7 @@ function handleSentenceInput(e) {
 
   if (e.target.classList.contains('stxt'))     s.text = e.target.value;
   if (e.target.classList.contains('ssfxofs'))  s.sfx_offset = parseFloat(e.target.value) || 0;
+  if (e.target.classList.contains('ssfxdur'))  { const v = parseFloat(e.target.value); s.sfx_duration = isNaN(v) || e.target.value === '' ? null : v; }
   if (e.target.classList.contains('svoice'))   s.voice_id = e.target.value || null;
   if (e.target.classList.contains('spause'))   { const v = parseFloat(e.target.value); s.pause_duration = isNaN(v) ? null : v; }
 }

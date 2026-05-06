@@ -8,7 +8,8 @@ class Sentence:
     id: str
     text: str
     sound_effect: str | None = None
-    sfx_offset: float = 0.0  # seconds from start of sentence when sfx plays
+    sfx_offset: float = 0.0       # seconds from start of sentence when sfx plays
+    sfx_duration: float | None = None  # seconds to play; None = play to end
     image: str | None = None   # relative path from library root; skips matching when set
     image2: str | None = None  # shown at the halfway point of the sentence
     voice_id: str | None = None  # overrides top-level voice_id when set
@@ -68,6 +69,7 @@ def parse(path: Path) -> VideoScript:
             text=s["text"],
             sound_effect=s.get("sound_effect"),
             sfx_offset=float(s.get("sfx_offset", 0.0)),
+            sfx_duration=float(s["sfx_duration"]) if s.get("sfx_duration") is not None else None,
             image=s.get("image"),
             image2=s.get("image2"),
             voice_id=s.get("voice_id") or None,

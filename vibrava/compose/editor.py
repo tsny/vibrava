@@ -309,8 +309,11 @@ def build(
 
         sfx_entry = (sfx_map or {}).get(sentence.id)
         if sfx_entry:
-            sfx_path, sfx_offset = sfx_entry
-            sfx_clip = AudioFileClip(str(sfx_path)).set_start(max(sfx_offset, 0.0))
+            sfx_path, sfx_offset, sfx_duration = sfx_entry
+            sfx_clip = AudioFileClip(str(sfx_path))
+            if sfx_duration is not None:
+                sfx_clip = sfx_clip.subclip(0, min(sfx_duration, sfx_clip.duration))
+            sfx_clip = sfx_clip.set_start(max(sfx_offset, 0.0))
             mixed = CompositeAudioClip([audio_clip, sfx_clip])
             video_clip = video_clip.set_audio(mixed)
         else:
