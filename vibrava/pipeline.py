@@ -8,6 +8,7 @@ from pathlib import Path
 
 from vibrava.audio import elevenlabs as tts_elevenlabs
 from vibrava.audio import tiktok as tts_tiktok
+from vibrava.audio.tts import AudioSegment
 from vibrava.clips.index import ClipIndex
 from vibrava.compose import editor
 from vibrava.config import Config
@@ -91,11 +92,13 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     else:
         print("[mood]  disabled (no ANTHROPIC_API_KEY or GEMINI_API_KEY)")
 
-    for sentence in script.sentences:
+    total = len(script.sentences)
+    for i, sentence in enumerate(script.sentences, 1):
         effective_voice_id = sentence.voice_id or voice_id
-        preview = sentence.text[:60] + ("..." if len(sentence.text) > 60 else "")
-        print(f"[tts]   {preview}  (pause={pause_duration}s)")
-        if use_tiktok:
+        eff_pause = sentence.pause_duration if sentence.pause_duration is not None else pause_duration
+        if not sentence.text.strip():
+            seg = AudioSegment(path=None, duration=eff_pause, words=[])
+        elif use_tiktok:
             seg = tts_tiktok.generate(
                 text=sentence.text,
                 voice_id=effective_voice_id,
@@ -112,26 +115,26 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
             )
         audio_map[sentence.id] = seg
 
+        inferred_moods: list[str] = []
         if sentence.image:
             img_path = index.library_dir / sentence.image
             label = f"{Path(sentence.image).name} (pinned)"
         else:
             img_path = matcher.match(sentence.text, index)
             if img_path is None and mood_enabled:
-                moods = _infer_moods_with_retry(
+                inferred_moods = _infer_moods_with_retry(
                     sentence.text,
                     cache_dir=mood_cache_dir,
                     provider=mood_provider,
                 )
-                if moods:
-                    print(f"[mood]  {', '.join(moods)}")
+                if inferred_moods:
                     img_path = matcher.match_with_tags(
-                        sentence.text, index, mood.mood_tags(moods)
+                        sentence.text, index, mood.mood_tags(inferred_moods)
                     )
             if img_path is None and script.random_fallback and index._clips:
                 entry = random.choice(index._clips)
                 img_path = index.resolve_path(entry)
-                label = f"{img_path.name} (random fallback)"
+                label = f"{img_path.name} (random)"
             elif img_path:
                 label = img_path.name
             else:
@@ -139,20 +142,39 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
 
         img2_path = (index.library_dir / sentence.image2) if sentence.image2 else None
         image_map[sentence.id] = [img_path, img2_path]
-        if img2_path:
-            print(f"[match] {label} + {img2_path.name}")
-        else:
-            print(f"[match] {label}")
 
+        sfx_label: str | None = None
         if sentence.sound_effect:
             sfx_path = config.sfx_path / sentence.sound_effect
             if sfx_path.exists():
                 sfx_map[sentence.id] = (sfx_path, sentence.sfx_offset, sentence.sfx_duration)
+                sfx_label = f"{sentence.sound_effect} @{sentence.sfx_offset}s"
+                if sentence.sfx_duration:
+                    sfx_label += f" [{sentence.sfx_duration}s]"
             else:
-                print(f"[warn]  sfx not found: {sfx_path}")
                 sfx_map[sentence.id] = None
+                sfx_label = f"NOT FOUND: {sentence.sound_effect}"
         else:
             sfx_map[sentence.id] = None
+
+        preview = sentence.text[:72] + ("..." if len(sentence.text) > 72 else "") if sentence.text.strip() else "(empty)"
+        print(f"[{i}/{total}] {preview}")
+
+        tts_line = f"        tts    {seg.duration:.2f}s  pause={eff_pause}s"
+        if sentence.voice_id:
+            tts_line += f"  voice={sentence.voice_id}"
+        print(tts_line)
+
+        match_line = f"        match  {label}"
+        if img2_path:
+            match_line += f" + {img2_path.name}"
+        print(match_line)
+
+        if inferred_moods:
+            print(f"        mood   {', '.join(inferred_moods)}")
+        if sfx_label:
+            warn = " [warn]" if sfx_label.startswith("NOT FOUND") else ""
+            print(f"        sfx    {sfx_label}{warn}")
 
     if output_path is None:
         ts = datetime.now().strftime("%m%d-%H%M")

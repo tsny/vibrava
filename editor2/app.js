@@ -9,7 +9,7 @@ const ALL_IMG    = new Set([...IMAGE_EXTS, ...GIF_EXTS]);
 
 const TYPE_FILTER_EXTS = { 'jpg/png': IMAGE_EXTS, 'gif': GIF_EXTS, 'mp4': VIDEO_EXTS };
 const PAGE_SIZE = 50;
-const COLS = 5;
+const COLS = 7;
 
 const ELEVENLABS_VOICES = [
   ['nPczCjzI2devNBz1zQrb', 'Brian - Deep, Narrative'],
@@ -390,7 +390,10 @@ function sentenceRowHtml(s, i) {
       </div>
       ${thumbColHtml(s.image, 'image', i, isSel)}
       ${thumbColHtml(s.image2, 'image2', i, isSel)}
-      <button class="btn sec sdel" data-si="${i}" title="Remove" style="align-self:flex-start;margin-top:4px;padding:4px 8px">✕</button>
+      <div style="display:flex;flex-direction:column;gap:4px;align-self:flex-start;margin-top:4px">
+        <button class="btn sec sdup" data-si="${i}" title="Duplicate" style="padding:4px 8px">⧉</button>
+        <button class="btn sec sdel" data-si="${i}" title="Remove" style="padding:4px 8px">✕</button>
+      </div>
     </div>
   `;
 }
@@ -424,6 +427,18 @@ function handleSentenceClick(e) {
       sfxAudio.src = sfxUrl(s.sound_effect);
       sfxAudio.play().catch(err => console.warn('SFX playback failed:', err));
     }
+    return;
+  }
+
+  const dup = e.target.closest('.sdup');
+  if (dup) {
+    const i = +dup.dataset.si;
+    const clone = JSON.parse(JSON.stringify(S.scriptData.sentences[i]));
+    clone.id = nextId(S.scriptData.sentences);
+    S.scriptData.sentences.splice(i + 1, 0, clone);
+    if (S.sel !== null && S.sel > i) S.sel++;
+    renderSentences();
+    renderPicker();
     return;
   }
 
@@ -520,8 +535,8 @@ function clipGridHtml(clips, curFile, disabled = false) {
       const isCur = !disabled && curFile === clip.file;
       const cachedSrc = !isVideo(clip.file) && imgBlobCache.get(clip.file);
       const thumb = isVideo(clip.file)
-        ? `<div class="clip-thumb" data-video-thumb="${esc(clip.file)}"></div>`
-        : `<img src="${cachedSrc || ''}" data-file="${esc(clip.file)}" loading="lazy" class="clip-thumb">`;
+        ? `<div class="clip-thumb asgn" data-video-thumb="${esc(clip.file)}" data-file="${esc(clip.file)}" ${disabled ? 'data-disabled' : ''} style="cursor:${disabled ? 'default' : 'pointer'}"></div>`
+        : `<img src="${cachedSrc || ''}" data-file="${esc(clip.file)}" loading="lazy" class="clip-thumb asgn" ${disabled ? 'data-disabled' : ''} style="cursor:${disabled ? 'default' : 'pointer'}">`;
       return `<div class="clip-cell">
         ${thumb}
         <button class="btn ${isCur ? 'pri' : 'sec'} asgn" data-file="${esc(clip.file)}"
@@ -673,7 +688,7 @@ function handlePickerClick(e) {
   }
 
   const asgn = e.target.closest('.asgn');
-  if (asgn && S.sel !== null) {
+  if (asgn && S.sel !== null && !asgn.hasAttribute('data-disabled') && !asgn.disabled) {
     const file = asgn.dataset.file;
     S.scriptData.sentences[S.sel][S.slot] = file;
     // Update thumbnail in sentence row without re-rendering the list
@@ -753,10 +768,17 @@ async function handlePreview() {
 
 // ─── Script loading ───────────────────────────────────────────────────────────
 
+function setUrlScript(name) {
+  const url = new URL(location.href);
+  url.searchParams.set('script', name);
+  history.replaceState(null, '', url);
+}
+
 async function loadScript(name) {
   const data = await get(`/api/script?name=${encodeURIComponent(name)}`);
   S.scriptName = name;
   S.scriptData = data;
+  setUrlScript(name);
   if (!Array.isArray(S.scriptData.sentences)) S.scriptData.sentences = [];
   ensureIds(S.scriptData.sentences);
   S.sel = null;
@@ -780,7 +802,11 @@ async function init() {
   S.clips = clips;
   S.sfxFiles = sfxFiles;
 
-  if (S.scripts.length) await loadScript(S.scripts[0]);
+  if (S.scripts.length) {
+    const urlScript = new URLSearchParams(location.search).get('script');
+    const initial = (urlScript && S.scripts.includes(urlScript)) ? urlScript : S.scripts[0];
+    await loadScript(initial);
+  }
 
   renderSidebar();
   renderSentences();

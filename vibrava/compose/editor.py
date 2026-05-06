@@ -293,9 +293,14 @@ def build(
         else:
             gap = pause_duration
 
-        # Load audio first — ffprobe/API durations can diverge from what MoviePy can read.
-        audio_clip = AudioFileClip(str(seg.path))
-        audio_duration = audio_clip.duration
+        # Empty sentences (no text) are pure pause gaps — no audio.
+        if seg.path is None:
+            audio_clip = None
+            audio_duration = 0.0
+        else:
+            # Load audio first — ffprobe/API durations can diverge from what MoviePy can read.
+            audio_clip = AudioFileClip(str(seg.path))
+            audio_duration = audio_clip.duration
         total_duration = audio_duration + gap
 
         # Base video: split at halfway point when a second image is provided
@@ -314,23 +319,24 @@ def build(
             if sfx_duration is not None:
                 sfx_clip = sfx_clip.subclip(0, min(sfx_duration, sfx_clip.duration))
             sfx_clip = sfx_clip.set_start(max(sfx_offset, 0.0))
-            mixed = CompositeAudioClip([audio_clip, sfx_clip])
-            video_clip = video_clip.set_audio(mixed)
-        else:
+            clips_to_mix = ([audio_clip] if audio_clip else []) + [sfx_clip]
+            video_clip = video_clip.set_audio(CompositeAudioClip(clips_to_mix))
+        elif audio_clip:
             video_clip = video_clip.set_audio(audio_clip)
 
         # Captions
-        if caption_style == "line":
+        if caption_style == "line" and sentence.text.strip():
             caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
             caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
             video_clip = CompositeVideoClip([video_clip, caption_clip])
 
         elif caption_style == "word":
             if not seg.words:
-                # No word timestamps (e.g. TikTok TTS) — fall back to line captions
-                caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
-                caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
-                video_clip = CompositeVideoClip([video_clip, caption_clip])
+                # No word timestamps (e.g. TikTok TTS or empty sentence) — fall back to line captions
+                if sentence.text.strip():
+                    caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
+                    caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
+                    video_clip = CompositeVideoClip([video_clip, caption_clip])
             else:
                 font, positions = _build_caption_layout(seg.words, width, height, caption_font_size, caption_y_pct)
                 caption_clips = []

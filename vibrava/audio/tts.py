@@ -11,6 +11,6 @@ class WordTimestamp:
 
 @dataclass
 class AudioSegment:
-    path: Path
+    path: Path | None
     duration: float
     words: list[WordTimestamp]
