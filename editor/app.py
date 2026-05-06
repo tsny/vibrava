@@ -42,6 +42,7 @@ ELEVENLABS_VOICES = [
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_config() -> dict:
     cfg = Path("config.toml")
     if cfg.exists():
@@ -117,14 +118,43 @@ def sentence_image_path(sentence: dict, key: str = "image") -> Path | None:
     if not img:
         return None
     p = Path(st.session_state.library_path) / img
-    return p if p.exists() and p.suffix.lower() in (IMAGE_EXTENSIONS | VIDEO_EXTENSIONS) else None
+    return (
+        p
+        if p.exists() and p.suffix.lower() in (IMAGE_EXTENSIONS | VIDEO_EXTENSIONS)
+        else None
+    )
+
+
+def _next_sentence_id(sentences: list[dict]) -> str:
+    used = {str(s.get("id", "")) for s in sentences}
+    numeric_ids = [
+        int(sentence_id[1:])
+        for sentence_id in used
+        if sentence_id.startswith("s") and sentence_id[1:].isdigit()
+    ]
+    next_num = max(numeric_ids, default=0) + 1
+    while f"s{next_num}" in used:
+        next_num += 1
+    return f"s{next_num}"
+
+
+def _touch_sentence(sentences: list[dict], index: int):
+    sentences[index]["id"] = _next_sentence_id(sentences)
+
+
+def _ensure_sentence_ids(sentences: list[dict]):
+    for sentence in sentences:
+        if not sentence.get("id"):
+            sentence["id"] = _next_sentence_id(sentences)
 
 
 # ---------------------------------------------------------------------------
 # Session state
 # ---------------------------------------------------------------------------
 
+
 def init_state():
+    had_picker_search_input = "picker_search_input" in st.session_state
     defaults: dict = {
         "script_path": None,
         "script_data": None,
@@ -136,12 +166,32 @@ def init_state():
         "selected_sentence": None,
         "picker_slot": "image",  # "image" | "image2"
         "picker_search": "",
+        "picker_search_input": "",
         "picker_type_filter": "all",
         "picker_page": 0,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+    if not had_picker_search_input:
+        st.session_state.picker_search_input = st.session_state.picker_search
+
+
+def _set_picker_search(search: str):
+    normalized = " ".join(t.strip().lower() for t in search.split() if t.strip())
+    st.session_state.picker_search = normalized
+    st.session_state.picker_search_input = normalized
+    st.session_state.picker_page = 0
+
+
+def _sync_picker_search():
+    st.session_state.picker_search = st.session_state.picker_search_input
+    st.session_state.picker_page = 0
+
+
+def _reset_picker_page():
+    st.session_state.picker_page = 0
+
 
 init_state()
 
@@ -156,9 +206,11 @@ if not st.session_state.sfx_files:
 # Script I/O
 # ---------------------------------------------------------------------------
 
+
 def open_script(path: Path):
     with open(path) as f:
         st.session_state.script_data = json.load(f)
+    _ensure_sentence_ids(st.session_state.script_data.setdefault("sentences", []))
     st.session_state.script_path = str(path)
     st.session_state.script_version += 1
     st.session_state.selected_sentence = None
@@ -196,13 +248,15 @@ with st.sidebar:
 
     # Script picker
     scripts_dir = Path("scripts")
-    script_files = sorted(
-        f for f in scripts_dir.glob("*.json") if scripts_dir.exists()
-    )
+    script_files = sorted(f for f in scripts_dir.glob("*.json") if scripts_dir.exists())
 
     if script_files:
         names = [f.name for f in script_files]
-        current = Path(st.session_state.script_path).name if st.session_state.script_path else names[0]
+        current = (
+            Path(st.session_state.script_path).name
+            if st.session_state.script_path
+            else names[0]
+        )
         idx = names.index(current) if current in names else 0
         chosen = st.selectbox("Script", names, index=idx)
         if st.button("Open", use_container_width=True):
@@ -249,8 +303,17 @@ with st.sidebar:
             providers,
             index=providers.index(cur_provider) if cur_provider in providers else 0,
         )
-        voice_hint = "e.g. en_us_002" if d["tts_provider"] == "tiktok" else "e.g. 21m00Tcm4TlvDq8ikWAM"
-        d["voice_id"] = st.text_input("Voice ID", value=d.get("voice_id") or "", placeholder=voice_hint) or None
+        voice_hint = (
+            "e.g. en_us_002"
+            if d["tts_provider"] == "tiktok"
+            else "e.g. 21m00Tcm4TlvDq8ikWAM"
+        )
+        d["voice_id"] = (
+            st.text_input(
+                "Voice ID", value=d.get("voice_id") or "", placeholder=voice_hint
+            )
+            or None
+        )
         if d["tts_provider"] == "elevenlabs":
             with st.popover("🎤 Browse ElevenLabs voices", use_container_width=True):
                 for vid, name in ELEVENLABS_VOICES:
@@ -302,6 +365,24 @@ with sep_col:
 # ── Left: sentence list ────────────────────────────────────────────────────
 
 with left_col:
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-sentence-row-"] {
+            border: 1px solid #433;
+            border-radius: 6px;
+            padding: 4px 8px;
+            margin-bottom: 6px;
+        }
+        div[class*="st-key-sentence-row-selected-"] {
+            background: rgba(74, 144, 226, 0.16);
+            border-color: #4A90E2;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     header_cols = st.columns([1, 6, 1, 1, 1])
     header_cols[1].markdown("**Text**")
     header_cols[2].markdown("**Img 1**")
@@ -313,118 +394,145 @@ with left_col:
         img_path = sentence_image_path(sentence, "image")
         img2_path = sentence_image_path(sentence, "image2")
 
-        border_color = "#4A90E2" if is_selected else "#333"
-        st.markdown(
-            f"<div style='border:1px solid {border_color}; border-radius:6px; padding:4px 8px; margin-bottom:6px'>",
-            unsafe_allow_html=True,
-        )
+        row_key = f"sentence-row-selected-{i}" if is_selected else f"sentence-row-{i}"
+        with st.container(key=row_key):
+            row = st.columns([1, 6, 1, 1, 1])
 
-        row = st.columns([1, 6, 1, 1, 1])
-
-        with row[0]:
-            st.markdown(
-                f"<p style='margin:28px 0 0 0; color:#888; font-size:0.85em'>{i + 1}</p>",
-                unsafe_allow_html=True,
-            )
-
-        with row[1]:
-            new_text = st.text_area(
-                "text",
-                value=sentence.get("text", ""),
-                key=f"text_{sv}_{i}",
-                height=68,
-                label_visibility="collapsed",
-            )
-            if new_text != sentence.get("text", ""):
-                sentences[i]["text"] = new_text
-            sfx_files = st.session_state.sfx_files
-            sfx_options = ["(none)"] + sfx_files
-            current_sfx = sentence.get("sound_effect") or "(none)"
-            sfx_idx = sfx_options.index(current_sfx) if current_sfx in sfx_options else 0
-            chosen_sfx = st.selectbox(
-                "sound_effect",
-                sfx_options,
-                index=sfx_idx,
-                key=f"sfx_{sv}_{i}",
-                label_visibility="collapsed",
-            )
-            new_sfx_val = None if chosen_sfx == "(none)" else chosen_sfx
-            if new_sfx_val != sentence.get("sound_effect"):
-                sentences[i]["sound_effect"] = new_sfx_val
-            if new_sfx_val:
-                new_offset = st.number_input(
-                    "sfx_offset",
-                    value=float(sentence.get("sfx_offset") or 0.0),
-                    min_value=0.0,
-                    step=0.1,
-                    format="%.1f",
-                    key=f"sfx_offset_{sv}_{i}",
-                    label_visibility="collapsed",
-                    help="Seconds from sentence start when sfx plays",
+            with row[0]:
+                st.markdown(
+                    f"<p style='margin:28px 0 0 0; color:#888; font-size:0.85em'>{i + 1}</p>",
+                    unsafe_allow_html=True,
                 )
-                if new_offset != sentence.get("sfx_offset", 0.0):
-                    sentences[i]["sfx_offset"] = new_offset
-            new_voice_id = st.text_input(
-                "voice_id",
-                value=sentence.get("voice_id") or "",
-                key=f"voice_id_{sv}_{i}",
-                label_visibility="collapsed",
-                placeholder="voice ID (overrides top-level)",
-            ) or None
-            if new_voice_id != sentence.get("voice_id"):
-                sentences[i]["voice_id"] = new_voice_id
 
-        for slot, col, path in [("image", row[2], img_path), ("image2", row[3], img2_path)]:
-            with col:
-                if path and path.suffix.lower() in VIDEO_EXTENSIONS:
-                    thumb = make_video_thumbnail(path, THUMB_SMALL)
-                    if thumb:
-                        st.image(thumb, use_container_width=True)
+            with row[1]:
+                new_text = st.text_area(
+                    "text",
+                    value=sentence.get("text", ""),
+                    key=f"text_{sv}_{i}",
+                    height=68,
+                    label_visibility="collapsed",
+                )
+                if new_text != sentence.get("text", ""):
+                    sentences[i]["text"] = new_text
+                    _touch_sentence(sentences, i)
+                sfx_files = st.session_state.sfx_files
+                sfx_options = ["(none)"] + sfx_files
+                current_sfx = sentence.get("sound_effect") or "(none)"
+                sfx_idx = (
+                    sfx_options.index(current_sfx) if current_sfx in sfx_options else 0
+                )
+                chosen_sfx = st.selectbox(
+                    "sound_effect",
+                    sfx_options,
+                    index=sfx_idx,
+                    key=f"sfx_{sv}_{i}",
+                    label_visibility="collapsed",
+                )
+                new_sfx_val = None if chosen_sfx == "(none)" else chosen_sfx
+                if new_sfx_val != sentence.get("sound_effect"):
+                    sentences[i]["sound_effect"] = new_sfx_val
+                    _touch_sentence(sentences, i)
+                if new_sfx_val:
+                    new_offset = st.number_input(
+                        "sfx_offset",
+                        value=float(sentence.get("sfx_offset") or 0.0),
+                        min_value=0.0,
+                        step=0.1,
+                        format="%.1f",
+                        key=f"sfx_offset_{sv}_{i}",
+                        label_visibility="collapsed",
+                        help="Seconds from sentence start when sfx plays",
+                    )
+                    if new_offset != sentence.get("sfx_offset", 0.0):
+                        sentences[i]["sfx_offset"] = new_offset
+                        _touch_sentence(sentences, i)
+                new_voice_id = (
+                    st.text_input(
+                        "voice_id",
+                        value=sentence.get("voice_id") or "",
+                        key=f"voice_id_{sv}_{i}",
+                        label_visibility="collapsed",
+                        placeholder="voice ID (overrides top-level)",
+                    )
+                    or None
+                )
+                if new_voice_id != sentence.get("voice_id"):
+                    sentences[i]["voice_id"] = new_voice_id
+                    _touch_sentence(sentences, i)
+
+            for slot, col, path in [
+                ("image", row[2], img_path),
+                ("image2", row[3], img2_path),
+            ]:
+                with col:
+                    if path and path.suffix.lower() in VIDEO_EXTENSIONS:
+                        thumb = make_video_thumbnail(path, THUMB_SMALL)
+                        if thumb:
+                            st.image(thumb, use_container_width=True)
+                        else:
+                            st.markdown(
+                                f"<div style='width:{THUMB_SMALL}px;height:{THUMB_SMALL}px;"
+                                "background:#1a1a2e;border-radius:4px;border:1px solid #555;"
+                                "display:flex;align-items:center;justify-content:center;"
+                                "font-size:1.4em'>▶️</div>",
+                                unsafe_allow_html=True,
+                            )
+                    elif path:
+                        st.image(
+                            make_thumbnail(path, THUMB_SMALL), use_container_width=True
+                        )
                     else:
                         st.markdown(
-                            f"<div style='width:{THUMB_SMALL}px;height:{THUMB_SMALL}px;"
-                            "background:#1a1a2e;border-radius:4px;border:1px solid #555;"
-                            "display:flex;align-items:center;justify-content:center;"
-                            "font-size:1.4em'>▶️</div>",
+                            f"<div style='width:100%;height:{THUMB_SMALL}px;"
+                            "background:#2a2a2a;border-radius:4px;border:1px dashed #555'></div>",
                             unsafe_allow_html=True,
                         )
-                elif path:
-                    st.image(make_thumbnail(path, THUMB_SMALL), use_container_width=True)
-                else:
-                    st.markdown(
-                        f"<div style='width:{THUMB_SMALL}px;height:{THUMB_SMALL}px;"
-                        "background:#2a2a2a;border-radius:4px;border:1px dashed #555'></div>",
-                        unsafe_allow_html=True,
-                    )
-                active = is_selected and st.session_state.picker_slot == slot
-                btn_type = "primary" if active else "secondary"
-                label = "1️⃣" if slot == "image" else "2️⃣"
-                if st.button(label, key=f"pick_{slot}_{sv}_{i}", use_container_width=True, type=btn_type):
-                    if active:
+                    active = is_selected and st.session_state.picker_slot == slot
+                    btn_type = "primary" if active else "secondary"
+                    label = "1️⃣" if slot == "image" else "2️⃣"
+                    if st.button(
+                        label,
+                        key=f"pick_{slot}_{sv}_{i}",
+                        use_container_width=True,
+                        type=btn_type,
+                    ):
+                        if active:
+                            st.session_state.selected_sentence = None
+                        else:
+                            if st.session_state.selected_sentence != i:
+                                st.session_state.picker_page = 0
+                                st.session_state.picker_search = ""
+                                st.session_state.picker_search_input = ""
+                                st.session_state.picker_type_filter = "all"
+                            st.session_state.selected_sentence = i
+                            st.session_state.picker_slot = slot
+                        st.rerun()
+
+            with row[4]:
+                st.markdown(
+                    "<div style='margin-top:28px'></div>", unsafe_allow_html=True
+                )
+                if st.button(
+                    "✕",
+                    key=f"del_{sv}_{i}",
+                    help="Remove sentence",
+                    use_container_width=True,
+                ):
+                    sentences.pop(i)
+                    if st.session_state.selected_sentence == i:
                         st.session_state.selected_sentence = None
-                    else:
-                        st.session_state.selected_sentence = i
-                        st.session_state.picker_slot = slot
+                    elif (st.session_state.selected_sentence or 0) > i:
+                        st.session_state.selected_sentence -= 1
                     st.rerun()
 
-        with row[4]:
-            st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
-            if st.button("✕", key=f"del_{sv}_{i}", help="Remove sentence", use_container_width=True):
-                sentences.pop(i)
-                if st.session_state.selected_sentence == i:
-                    st.session_state.selected_sentence = None
-                elif (st.session_state.selected_sentence or 0) > i:
-                    st.session_state.selected_sentence -= 1
-                st.rerun()
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
     if st.button("＋ Add sentence", use_container_width=True):
-        sentences.append({
-            "id": f"s{len(sentences) + 1}",
-            "text": "",
-            "sound_effect": None,
-        })
+        sentences.append(
+            {
+                "id": _next_sentence_id(sentences),
+                "text": "",
+                "sound_effect": None,
+            }
+        )
         st.session_state.selected_sentence = len(sentences) - 1
         st.rerun()
 
@@ -460,16 +568,14 @@ with right_col:
             elif path:
                 st.image(open_image(path), width=120)
                 st.caption(sentence.get(key, ""))
-                if st.button(f"✕ Clear {lbl}", key=f"clear_{key}"):
+                if st.button(f"✕ Clear {lbl}", key=f"clear_{key}_{sel}"):
                     sentences[sel][key] = None
+                    _touch_sentence(sentences, sel)
                     st.rerun()
             else:
                 st.caption("None")
 
     st.divider()
-
-    def _reset_page():
-        st.session_state.picker_page = 0
 
     # Top tags quick-select
     tag_counts = Counter(
@@ -477,7 +583,11 @@ with right_col:
     )
     top_tags = [tag for tag, _ in tag_counts.most_common(20)]
     if top_tags:
-        active_terms = {t.strip().lower() for t in st.session_state.picker_search.split() if t.strip()}
+        active_terms = {
+            t.strip().lower()
+            for t in st.session_state.picker_search.split()
+            if t.strip()
+        }
         tag_rows = [top_tags[:10], top_tags[10:]]
         for row_tags in tag_rows:
             cols = st.columns(len(row_tags))
@@ -490,40 +600,54 @@ with right_col:
                         type="primary" if is_active else "secondary",
                         use_container_width=True,
                     ):
-                        terms_set = {t.strip().lower() for t in st.session_state.picker_search.split() if t.strip()}
+                        terms_set = {
+                            t.strip().lower()
+                            for t in st.session_state.picker_search.split()
+                            if t.strip()
+                        }
                         if tag.lower() in terms_set:
                             terms_set.discard(tag.lower())
                         else:
                             terms_set.add(tag.lower())
-                        st.session_state.picker_search = " ".join(sorted(terms_set))
-                        st.session_state.picker_page = 0
+                        _set_picker_search(" ".join(sorted(terms_set)))
                         st.rerun()
 
-    search = st.text_input(
+    st.text_input(
         "Filter clips",
-        value=st.session_state.picker_search,
         placeholder="tag or filename…",
-        key="picker_search",
-        on_change=_reset_page,
+        key="picker_search_input",
+        on_change=_sync_picker_search,
     )
+    if st.session_state.picker_search_input != st.session_state.picker_search:
+        st.session_state.picker_search = st.session_state.picker_search_input
+
     type_filter = st.radio(
         "Type",
         TYPE_FILTER_OPTIONS,
         index=TYPE_FILTER_OPTIONS.index(st.session_state.picker_type_filter),
         horizontal=True,
         key="picker_type_filter",
-        on_change=_reset_page,
+        on_change=_reset_picker_page,
     )
+    search = st.session_state.picker_search
     terms = [t.strip().lower() for t in search.split() if t.strip()]
 
     clips = st.session_state.clip_index
     if type_filter != "all":
         allowed_exts = TYPE_FILTER_EXTS[type_filter]
-        clips = [c for c in clips if Path(c.get("file", "")).suffix.lower() in allowed_exts]
+        clips = [
+            c for c in clips if Path(c.get("file", "")).suffix.lower() in allowed_exts
+        ]
     if terms:
+
         def clip_matches(clip: dict) -> bool:
-            haystack = " ".join(clip.get("tags", [])).lower() + " " + clip.get("file", "").lower()
+            haystack = (
+                " ".join(clip.get("tags", [])).lower()
+                + " "
+                + clip.get("file", "").lower()
+            )
             return all(t in haystack for t in terms)
+
         clips = [c for c in clips if clip_matches(c)]
 
     lib = Path(st.session_state.library_path)
@@ -542,12 +666,21 @@ with right_col:
 
         for row_start in range(0, len(page_clips), COLS):
             cols = st.columns(COLS)
-            for col_idx, clip in enumerate(page_clips[row_start:row_start + COLS]):
+            for col_idx, clip in enumerate(page_clips[row_start : row_start + COLS]):
                 with cols[col_idx]:
                     img_file = lib / clip["file"]
-                    if img_file.exists() and img_file.suffix.lower() in IMAGE_EXTENSIONS:
-                        st.image(make_thumbnail(img_file, THUMB_PICK), use_container_width=True)
-                    elif img_file.exists() and img_file.suffix.lower() in VIDEO_EXTENSIONS:
+                    if (
+                        img_file.exists()
+                        and img_file.suffix.lower() in IMAGE_EXTENSIONS
+                    ):
+                        st.image(
+                            make_thumbnail(img_file, THUMB_PICK),
+                            use_container_width=True,
+                        )
+                    elif (
+                        img_file.exists()
+                        and img_file.suffix.lower() in VIDEO_EXTENSIONS
+                    ):
                         thumb = make_video_thumbnail(img_file, THUMB_PICK)
                         if thumb:
                             st.image(thumb, use_container_width=True)
@@ -570,6 +703,7 @@ with right_col:
                         type=btn_type,
                     ):
                         sentences[sel][slot] = clip["file"]
+                        _touch_sentence(sentences, sel)
                         st.rerun()
 
         if total_pages > 1:
@@ -581,6 +715,8 @@ with right_col:
             with nav_cols[1]:
                 st.caption(f"Page {page + 1} of {total_pages} · {len(clips)} clips")
             with nav_cols[2]:
-                if st.button("Next →", disabled=page >= total_pages - 1, use_container_width=True):
+                if st.button(
+                    "Next →", disabled=page >= total_pages - 1, use_container_width=True
+                ):
                     st.session_state.picker_page += 1
                     st.rerun()

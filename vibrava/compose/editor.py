@@ -106,7 +106,7 @@ def _render_caption_line(text: str, width: int, height: int) -> np.ndarray:
 
     line_height = font_size + 12
     total_text_height = len(lines) * line_height
-    y = height - total_text_height - 120
+    y = int(height * 4 / 5) - total_text_height // 2
 
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
@@ -132,7 +132,7 @@ def _build_caption_layout(
     lines = _wrap_text(full_text, font, int(width * 0.88))
 
     line_height = font_size + 12
-    y = height - len(lines) * line_height - 120
+    y = int(height * 4 / 5) - len(lines) * line_height // 2
 
     dummy = Image.new("RGBA", (1, 1))
     draw = ImageDraw.Draw(dummy)

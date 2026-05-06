@@ -30,6 +30,25 @@ class VideoScript:
     tts_provider: str = "elevenlabs"    # "elevenlabs" | "tiktok"
 
 
+def _next_sentence_id(raw_sentences: list[dict]) -> str:
+    used = {str(s.get("id", "")) for s in raw_sentences}
+    numeric_ids = [
+        int(sentence_id[1:])
+        for sentence_id in used
+        if sentence_id.startswith("s") and sentence_id[1:].isdigit()
+    ]
+    next_num = max(numeric_ids, default=0) + 1
+    while f"s{next_num}" in used:
+        next_num += 1
+    return f"s{next_num}"
+
+
+def _ensure_sentence_ids(raw_sentences: list[dict]):
+    for sentence in raw_sentences:
+        if not sentence.get("id"):
+            sentence["id"] = _next_sentence_id(raw_sentences)
+
+
 def parse(path: Path) -> VideoScript:
     with open(path) as f:
         data = json.load(f)
@@ -37,6 +56,7 @@ def parse(path: Path) -> VideoScript:
     if data.get("mode") != "cat_story":
         raise ValueError(f"Expected mode 'cat_story', got '{data.get('mode')}'")
 
+    _ensure_sentence_ids(data["sentences"])
     sentences = [
         Sentence(
             id=s["id"],
