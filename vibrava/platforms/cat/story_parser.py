@@ -12,6 +12,7 @@ class Sentence:
     image: str | None = None   # relative path from library root; skips matching when set
     image2: str | None = None  # shown at the halfway point of the sentence
     voice_id: str | None = None  # overrides top-level voice_id when set
+    pause_duration: float | None = None  # overrides script/config pause when set
 
 
 @dataclass
@@ -70,6 +71,7 @@ def parse(path: Path) -> VideoScript:
             image=s.get("image"),
             image2=s.get("image2"),
             voice_id=s.get("voice_id") or None,
+            pause_duration=float(s["pause_duration"]) if s.get("pause_duration") is not None else None,
         )
         for s in data["sentences"]
     ]

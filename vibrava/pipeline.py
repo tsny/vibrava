@@ -2,6 +2,7 @@ import json
 import os
 import random
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +36,25 @@ def _resolve_mood_provider() -> str | None:
     return None
 
 
+def _infer_moods_with_retry(
+    text: str,
+    cache_dir: Path,
+    provider: str,
+    retries: int = 3,
+    delay: float = 2.0,
+) -> list[str]:
+    for attempt in range(retries):
+        try:
+            return mood.infer_moods(text, cache_dir=cache_dir, provider=provider)
+        except Exception as e:
+            if attempt < retries - 1:
+                print(f"[mood]  error (attempt {attempt + 1}/{retries}): {e}; retrying in {delay}s")
+                time.sleep(delay)
+            else:
+                print(f"[mood]  failed after {retries} attempts: {e}")
+    return []
+
+
 def _run_video_script(script_path: Path, config: Config, output_path: Path | None = None) -> None:
     script = parse_video_script(script_path)
 
@@ -52,7 +72,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     else:
         voice_id = script.voice_id or config.elevenlabs.default_voice_id
 
-    pause = (
+    pause_duration = (
         script.pause_duration
         if script.pause_duration is not None
         else config.pause_duration
@@ -74,7 +94,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     for sentence in script.sentences:
         effective_voice_id = sentence.voice_id or voice_id
         preview = sentence.text[:60] + ("..." if len(sentence.text) > 60 else "")
-        print(f"[tts]   {preview}  (pause={pause}s)")
+        print(f"[tts]   {preview}  (pause={pause_duration}s)")
         if use_tiktok:
             seg = tts_tiktok.generate(
                 text=sentence.text,
@@ -98,7 +118,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
         else:
             img_path = matcher.match(sentence.text, index)
             if img_path is None and mood_enabled:
-                moods = mood.infer_moods(
+                moods = _infer_moods_with_retry(
                     sentence.text,
                     cache_dir=mood_cache_dir,
                     provider=mood_provider,
@@ -163,7 +183,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
         overlay_image_size=script.overlay_image_size,
         output_path=output_path,
         resolution=script.resolution,
-        pause_duration=pause,
+        pause_duration=pause_duration,
         caption_style=script.caption_style,
         music_path=music_path,
         music_volume=script.music_volume,
@@ -201,7 +221,7 @@ def _resolve_video_script(script_path: Path, config: Config) -> None:
         else:
             img_path = matcher.match(sentence.text, index)
             if img_path is None and mood_enabled:
-                moods = mood.infer_moods(
+                moods = _infer_moods_with_retry(
                     sentence.text,
                     cache_dir=mood_cache_dir,
                     provider=mood_provider,

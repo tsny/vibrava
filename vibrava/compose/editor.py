@@ -286,7 +286,12 @@ def build(
         images = image_map.get(sentence.id) or [None]
         img_path = images[0] if images else None
         img2_path = images[1] if len(images) > 1 else None
-        gap = random.uniform(0.1, pause_jitter) if pause_jitter > 0 else pause_duration
+        if sentence.pause_duration is not None:
+            gap = sentence.pause_duration
+        elif pause_jitter > 0:
+            gap = random.uniform(0.1, pause_jitter)
+        else:
+            gap = pause_duration
 
         # Load audio first — ffprobe/API durations can diverge from what MoviePy can read.
         audio_clip = AudioFileClip(str(seg.path))
