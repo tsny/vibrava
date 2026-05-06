@@ -47,6 +47,8 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return _font_cache[size]
 
 
+_PADDING = 0.90
+
 # ---------------------------------------------------------------------------
 # Frame builders
 # ---------------------------------------------------------------------------
@@ -59,8 +61,7 @@ def _make_background_frame(img_path: Path, width: int, height: int) -> np.ndarra
 
     bg = Image.new("RGB", (width, height), (0, 0, 0))
 
-    padding = 0.90
-    fg_ratio = min(width / img.width, height / img.height) * padding
+    fg_ratio = min(width / img.width, height / img.height) * _PADDING
     fg = img.resize(
         (int(img.width * fg_ratio), int(img.height * fg_ratio)), Image.LANCZOS
     )
@@ -179,8 +180,7 @@ def _make_video_clip(video_path: Path, width: int, height: int, duration: float)
         clip = clip.subclip(0, duration)
     else:
         clip = clip.set_duration(duration)
-    padding = 0.90
-    scale = min(width / clip.w, height / clip.h) * padding
+    scale = min(width / clip.w, height / clip.h) * _PADDING
     new_w, new_h = int(clip.w * scale), int(clip.h * scale)
     x, y = (width - new_w) // 2, (height - new_h) // 2
 
@@ -196,14 +196,12 @@ def _make_video_clip(video_path: Path, width: int, height: int, duration: float)
 def _make_gif_clip(gif_path: Path, width: int, height: int, duration: float):
     """Load an animated GIF via PIL, resize frames, loop to fill duration."""
     gif = Image.open(gif_path)
-    padding = 0.90
-
     frames = []
     frame_durations = []
     try:
         while True:
             frame = gif.copy().convert("RGB")
-            scale = min(width / frame.width, height / frame.height) * padding
+            scale = min(width / frame.width, height / frame.height) * _PADDING
             fw, fh = int(frame.width * scale), int(frame.height * scale)
             frame = frame.resize((fw, fh), Image.LANCZOS)
             bg = Image.new("RGB", (width, height), (0, 0, 0))
@@ -216,6 +214,21 @@ def _make_gif_clip(gif_path: Path, width: int, height: int, duration: float):
 
     clip = ImageSequenceClip(frames, durations=frame_durations)
     return clip.loop(duration=duration)
+
+
+# ---------------------------------------------------------------------------
+# Overlay image
+# ---------------------------------------------------------------------------
+
+def _make_overlay_clip(overlay_path: Path, width: int, height: int, duration: float, size_frac: float = 1/6, padding: int = 20) -> ImageClip:
+    img = Image.open(overlay_path).convert("RGBA")
+    max_dim = max(1, int(width * size_frac))
+    scale = min(max_dim / img.width, max_dim / img.height, 1.0)
+    new_w, new_h = int(img.width * scale), int(img.height * scale)
+    img = img.resize((new_w, new_h), Image.LANCZOS)
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    canvas.paste(img, (padding, height - new_h - padding), img)
+    return ImageClip(np.array(canvas), ismask=False).set_duration(duration)
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +259,8 @@ def build(
     pause_duration: float,
     caption_style: str,
     sfx_map: dict[str, tuple[Path, float] | None] | None = None,
+    overlay_image_path: Path | None = None,
+    overlay_image_size: float = 1/6,
     music_path: Path | None = None,
     music_volume: float = 0.15,
     music_start: float = 0.0,
@@ -294,30 +309,34 @@ def build(
             caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
             video_clip = CompositeVideoClip([video_clip, caption_clip])
 
-        elif caption_style == "word" and not seg.words:
-            # No word timestamps (e.g. TikTok TTS) — fall back to line captions
-            caption_frame = _render_caption_line(sentence.text, width, height)
-            caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
-            video_clip = CompositeVideoClip([video_clip, caption_clip])
-
-        elif caption_style == "word" and seg.words:
-            font, positions = _build_caption_layout(seg.words, width, height)
-            caption_clips = []
-            for i, word in enumerate(seg.words):
-                end = seg.words[i + 1].start if i + 1 < len(seg.words) else audio_duration
-                duration = max(end - word.start, 0.05)
-                frame_arr = _render_caption_word(seg.words, i, width, height, font, positions)
-                wclip = (
-                    ImageClip(frame_arr, ismask=False)
-                    .set_start(word.start)
-                    .set_duration(duration)
-                )
-                caption_clips.append(wclip)
-            video_clip = CompositeVideoClip([video_clip] + caption_clips)
+        elif caption_style == "word":
+            if not seg.words:
+                # No word timestamps (e.g. TikTok TTS) — fall back to line captions
+                caption_frame = _render_caption_line(sentence.text, width, height)
+                caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
+                video_clip = CompositeVideoClip([video_clip, caption_clip])
+            else:
+                font, positions = _build_caption_layout(seg.words, width, height)
+                caption_clips = []
+                for i, word in enumerate(seg.words):
+                    end = seg.words[i + 1].start if i + 1 < len(seg.words) else audio_duration
+                    duration = max(end - word.start, 0.05)
+                    frame_arr = _render_caption_word(seg.words, i, width, height, font, positions)
+                    wclip = (
+                        ImageClip(frame_arr, ismask=False)
+                        .set_start(word.start)
+                        .set_duration(duration)
+                    )
+                    caption_clips.append(wclip)
+                video_clip = CompositeVideoClip([video_clip] + caption_clips)
 
         clips.append(video_clip)
 
     final = concatenate_videoclips(clips, method="compose")
+
+    if overlay_image_path and overlay_image_path.exists():
+        overlay = _make_overlay_clip(overlay_image_path, width, height, final.duration, size_frac=overlay_image_size)
+        final = CompositeVideoClip([final, overlay])
 
     if music_path:
         music_duration = final.duration - music_start

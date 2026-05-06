@@ -145,12 +145,21 @@ def _run_video_script(script_path: Path, config: Config) -> None:
             print(f"[warn] music file not found: {music_path}")
             music_path = None
 
+    overlay_image_path = None
+    if script.overlay_image:
+        overlay_image_path = config.library_path / script.overlay_image
+        if not overlay_image_path.exists():
+            print(f"[warn] overlay image not found: {overlay_image_path}")
+            overlay_image_path = None
+
     print(f"[compose] → {output_path}")
     editor.build(
         sentences=script.sentences,
         audio_map=audio_map,
         image_map=image_map,
         sfx_map=sfx_map,
+        overlay_image_path=overlay_image_path,
+        overlay_image_size=script.overlay_image_size,
         output_path=output_path,
         resolution=script.resolution,
         pause_duration=pause,

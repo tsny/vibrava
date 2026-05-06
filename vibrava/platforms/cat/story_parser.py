@@ -28,6 +28,8 @@ class VideoScript:
     random_fallback: bool = False        # use a random image when no tag match found
     pause_jitter: float = 0.0            # when > 0, randomize gap to uniform(0.1, pause_jitter); max 1.0
     tts_provider: str = "elevenlabs"    # "elevenlabs" | "tiktok"
+    overlay_image: str | None = None    # path relative to library root; composited bottom-left over entire video
+    overlay_image_size: float = 1/6    # fraction of video width (0.0–1.0)
 
 
 def _next_sentence_id(raw_sentences: list[dict]) -> str:
@@ -84,4 +86,6 @@ def parse(path: Path) -> VideoScript:
         random_fallback=data.get("random_fallback", False),
         pause_jitter=min(data.get("pause_jitter", 0.0), 1.0),
         tts_provider=data.get("tts_provider", "elevenlabs"),
+        overlay_image=data.get("overlay_image"),
+        overlay_image_size=float(data.get("overlay_image_size", 1/6)),
     )
