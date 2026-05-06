@@ -35,7 +35,7 @@ def _resolve_mood_provider() -> str | None:
     return None
 
 
-def _run_video_script(script_path: Path, config: Config) -> None:
+def _run_video_script(script_path: Path, config: Config, output_path: Path | None = None) -> None:
     script = parse_video_script(script_path)
 
     index = ClipIndex.load(config.library_path / "clip_index.json")
@@ -134,9 +134,10 @@ def _run_video_script(script_path: Path, config: Config) -> None:
         else:
             sfx_map[sentence.id] = None
 
-    ts = datetime.now().strftime("%m%d-%H%M")
-    stem = Path(script.output_filename).stem
-    output_path = config.output_path / f"{stem}_{ts}.mp4"
+    if output_path is None:
+        ts = datetime.now().strftime("%m%d-%H%M")
+        stem = Path(script.output_filename).stem
+        output_path = config.output_path / f"{stem}_{ts}.mp4"
 
     music_path = None
     if script.music:
@@ -168,6 +169,8 @@ def _run_video_script(script_path: Path, config: Config) -> None:
         music_volume=script.music_volume,
         music_start=script.music_start,
         pause_jitter=script.pause_jitter,
+        caption_font_size=script.caption_font_size,
+        caption_y_pct=script.caption_y_pct,
     )
     print(f"[done] {output_path}")
     if config.on_complete:
@@ -232,12 +235,12 @@ def _resolve_video_script(script_path: Path, config: Config) -> None:
     print(f"[done]  {out_path}")
 
 
-def run(script_path: Path, config: Config) -> None:
+def run(script_path: Path, config: Config, output_path: Path | None = None) -> None:
     with open(script_path) as f:
         mode = json.load(f).get("mode")
 
     if mode == "cat_story":
-        _run_video_script(script_path, config)
+        _run_video_script(script_path, config, output_path=output_path)
     else:
         raise ValueError(f"Unsupported mode: '{mode}'")
 

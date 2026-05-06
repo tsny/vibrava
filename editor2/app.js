@@ -218,6 +218,17 @@ function renderSidebar() {
         ${['word', 'line', 'none'].map(v => `<option value="${v}"${(d.caption_style || 'line') === v ? ' selected' : ''}>${v}</option>`).join('')}
       </select>
 
+      <label class="lbl">Caption font size (px, blank = auto)</label>
+      <input id="ss-capfont" class="inp" type="number" min="8" max="300" step="1" style="width:100%"
+        value="${d.caption_font_size ?? ''}" placeholder="auto">
+
+      <label class="lbl">Caption vertical position</label>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input id="ss-capy" type="range" min="0" max="100" step="1" style="flex:1"
+          value="${d.caption_y_pct ?? 80}">
+        <span id="ss-capy-val" style="color:#ccc;font-size:0.85em;min-width:32px;text-align:right">${d.caption_y_pct ?? 80}%</span>
+      </div>
+
       <label class="lbl">Output filename</label>
       <input id="ss-outfile" class="inp" style="width:100%" value="${esc(d.output_filename || 'output.mp4')}">
 
@@ -280,6 +291,18 @@ function bindSidebar() {
 
   document.getElementById('ss-caption')?.addEventListener('change', e => {
     S.scriptData.caption_style = e.target.value;
+  });
+
+  document.getElementById('ss-capfont')?.addEventListener('input', e => {
+    const v = parseInt(e.target.value);
+    S.scriptData.caption_font_size = isNaN(v) ? null : v;
+  });
+
+  document.getElementById('ss-capy')?.addEventListener('input', e => {
+    const v = parseInt(e.target.value);
+    S.scriptData.caption_y_pct = v;
+    const span = document.getElementById('ss-capy-val');
+    if (span) span.textContent = v + '%';
   });
 
   document.getElementById('ss-outfile')?.addEventListener('input', e => {
@@ -697,7 +720,10 @@ async function handlePreview() {
   const btn = document.getElementById('preview-btn');
   if (btn) { btn.textContent = '⏳ Rendering…'; btn.disabled = true; }
   try {
-    const url = `/api/preview?name=${encodeURIComponent(S.scriptName)}&idx=${S.sel}&t=${Date.now()}`;
+    const d = S.scriptData || {};
+    const capFont = d.caption_font_size != null ? `&capfont=${d.caption_font_size}` : '';
+    const capY = d.caption_y_pct != null ? `&capy=${d.caption_y_pct}` : '';
+    const url = `/api/preview?name=${encodeURIComponent(S.scriptName)}&idx=${S.sel}${capFont}${capY}&t=${Date.now()}`;
     showPreviewModal(url);
   } finally {
     if (btn) { btn.textContent = '🖼 Preview'; btn.disabled = false; }

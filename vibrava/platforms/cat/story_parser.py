@@ -30,6 +30,8 @@ class VideoScript:
     tts_provider: str = "elevenlabs"    # "elevenlabs" | "tiktok"
     overlay_image: str | None = None    # path relative to library root; composited bottom-left over entire video
     overlay_image_size: float = 1/6    # fraction of video width (0.0–1.0)
+    caption_font_size: int | None = None  # px at original resolution; None = auto (height // 26)
+    caption_y_pct: float = 80.0           # vertical position as % of frame height (0 = top, 100 = bottom)
 
 
 def _next_sentence_id(raw_sentences: list[dict]) -> str:
@@ -88,4 +90,6 @@ def parse(path: Path) -> VideoScript:
         tts_provider=data.get("tts_provider", "elevenlabs"),
         overlay_image=data.get("overlay_image"),
         overlay_image_size=float(data.get("overlay_image_size", 1/6)),
+        caption_font_size=data.get("caption_font_size") or None,
+        caption_y_pct=float(data.get("caption_y_pct", 80.0)),
     )

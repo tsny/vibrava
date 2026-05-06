@@ -95,9 +95,13 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[
     return lines
 
 
-def _render_caption_line(text: str, width: int, height: int) -> np.ndarray:
+def _render_caption_line(
+    text: str, width: int, height: int,
+    font_size_override: int | None = None,
+    y_pct: float = 80.0,
+) -> np.ndarray:
     """Render the full sentence as white text with black stroke near the bottom."""
-    font_size = max(44, height // 26)
+    font_size = font_size_override if font_size_override is not None else max(44, height // 26)
     font = _load_font(font_size)
     max_text_width = int(width * 0.88)
     lines = _wrap_text(text, font, max_text_width)
@@ -107,7 +111,7 @@ def _render_caption_line(text: str, width: int, height: int) -> np.ndarray:
 
     line_height = font_size + 12
     total_text_height = len(lines) * line_height
-    y = int(height * 4 / 5) - total_text_height // 2
+    y = int(height * y_pct / 100) - total_text_height // 2
 
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
@@ -122,18 +126,20 @@ def _build_caption_layout(
     words: list[WordTimestamp],
     width: int,
     height: int,
+    font_size_override: int | None = None,
+    y_pct: float = 80.0,
 ) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, list[tuple[int, int]]]:
     """
     Compute font and (x, y) position for each word once per sentence.
     Returns (font, word_positions).
     """
-    font_size = max(44, height // 26)
+    font_size = font_size_override if font_size_override is not None else max(44, height // 26)
     font = _load_font(font_size)
     full_text = " ".join(w.word for w in words)
     lines = _wrap_text(full_text, font, int(width * 0.88))
 
     line_height = font_size + 12
-    y = int(height * 4 / 5) - len(lines) * line_height // 2
+    y = int(height * y_pct / 100) - len(lines) * line_height // 2
 
     dummy = Image.new("RGBA", (1, 1))
     draw = ImageDraw.Draw(dummy)
@@ -266,6 +272,8 @@ def build(
     music_start: float = 0.0,
     pause_jitter: float = 0.0,
     fps: int = 30,
+    caption_font_size: int | None = None,
+    caption_y_pct: float = 80.0,
 ) -> None:
     width, height = resolution
     clips = []
@@ -305,18 +313,18 @@ def build(
 
         # Captions
         if caption_style == "line":
-            caption_frame = _render_caption_line(sentence.text, width, height)
+            caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
             caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
             video_clip = CompositeVideoClip([video_clip, caption_clip])
 
         elif caption_style == "word":
             if not seg.words:
                 # No word timestamps (e.g. TikTok TTS) — fall back to line captions
-                caption_frame = _render_caption_line(sentence.text, width, height)
+                caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
                 caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
                 video_clip = CompositeVideoClip([video_clip, caption_clip])
             else:
-                font, positions = _build_caption_layout(seg.words, width, height)
+                font, positions = _build_caption_layout(seg.words, width, height, caption_font_size, caption_y_pct)
                 caption_clips = []
                 for i, word in enumerate(seg.words):
                     end = seg.words[i + 1].start if i + 1 < len(seg.words) else audio_duration

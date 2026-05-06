@@ -71,6 +71,8 @@ def render_preview_frame(
     resolution: tuple[int, int],
     overlay_size_frac: float = 1/6,
     preview_width: int = 360,
+    caption_font_size: int | None = None,
+    caption_y_pct: float = 80.0,
 ) -> bytes:
     orig_w, orig_h = resolution
     scale = preview_width / orig_w
@@ -89,13 +91,16 @@ def render_preview_frame(
             pass
 
     if caption_style != "none" and text.strip():
-        font_size = max(18, height // 26)
+        if caption_font_size is not None:
+            font_size = max(8, int(caption_font_size * scale))
+        else:
+            font_size = max(18, height // 26)
         font = _load_font(font_size)
         lines = _wrap_text(text, font, int(width * 0.88))
         overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
         line_h = font_size + 8
-        y = int(height * 4 / 5) - (len(lines) * line_h) // 2
+        y = int(height * caption_y_pct / 100) - (len(lines) * line_h) // 2
         for line in lines:
             bbox = draw.textbbox((0, 0), line, font=font)
             x = (width - (bbox[2] - bbox[0])) // 2
@@ -154,6 +159,10 @@ class Handler(BaseHTTPRequestHandler):
             res = data.get("resolution", [1080, 1920])
             image_file = s.get("image")
             overlay_file = data.get("overlay_image")
+            cap_font_str = qs.get("capfont", [None])[0]
+            cap_y_str = qs.get("capy", [None])[0]
+            caption_font_size = int(cap_font_str) if cap_font_str else None
+            caption_y_pct = float(cap_y_str) if cap_y_str else float(data.get("caption_y_pct", 80))
             jpeg = render_preview_frame(
                 image_path=(LIBRARY_PATH / image_file) if image_file else None,
                 text=s.get("text", ""),
@@ -161,6 +170,8 @@ class Handler(BaseHTTPRequestHandler):
                 overlay_path=(LIBRARY_PATH / overlay_file) if overlay_file else None,
                 overlay_size_frac=float(data.get("overlay_image_size", 1/6)),
                 resolution=(res[0], res[1]),
+                caption_font_size=caption_font_size,
+                caption_y_pct=caption_y_pct,
             )
             self.send_response(200)
             self.send_header("Content-Type", "image/jpeg")

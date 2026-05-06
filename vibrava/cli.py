@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -11,6 +12,10 @@ def main() -> None:
     gen.add_argument("script", type=Path, help="Path to script JSON file")
     gen.add_argument(
         "--config", type=Path, default=Path("config.toml"), help="Path to config.toml"
+    )
+    gen.add_argument(
+        "--output", type=Path, default=None,
+        help="Output file path (overrides script filename + timestamp; also VIBRAVA_OUTPUT env var)",
     )
 
     res = sub.add_parser("resolve", help="Match images to a script and write a .resolved.json")
@@ -26,7 +31,8 @@ def main() -> None:
         from vibrava.pipeline import run
 
         config = load_config(args.config)
-        run(args.script, config)
+        output = args.output or (Path(os.environ["VIBRAVA_OUTPUT"]) if "VIBRAVA_OUTPUT" in os.environ else None)
+        run(args.script, config, output_path=output)
     elif args.command == "resolve":
         from vibrava.config import load as load_config
         from vibrava.pipeline import resolve
