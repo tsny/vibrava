@@ -12,6 +12,7 @@ const PAGE_SIZE = 50;
 const COLS = 7;
 
 const ELEVENLABS_VOICES = [
+  ['21m00Tcm4TlvDq8ikWAM', 'Rachel - Calm, Confident Narrator'],
   ['nPczCjzI2devNBz1zQrb', 'Brian - Deep, Narrative'],
   ['CwhRBWXzGAHq8TQ4Fs17', 'Roger - Laid-Back, Casual, Resonant'],
   ['EXAVITQu4vr4xnSDxMaL', 'Sarah - Mature, Reassuring, Confident'],
@@ -23,8 +24,12 @@ const ELEVENLABS_VOICES = [
   ['SOYHLrjzK2X1ezoPC6cr', 'Harry - Fierce Warrior'],
   ['TX3LPaxmHKxFdv7VOQHJ', 'Liam - Energetic, Social Media Creator'],
   ['Xb7hH8MSUJpSbSDYk0k2', 'Alice - Clear, Engaging Educator'],
+  ['XB0fDUnXU5powFXDhCwa', 'Charlotte - Mature, Elegant British'],
   ['XrExE9yKIg1WjnnlVkGX', 'Matilda - Knowledgable, Professional'],
   ['bIHbv24MWmeRgasZH58o', 'Will - Relaxed Optimist'],
+  ['onwK4e9ZLuTAKqWW03F9', 'Daniel - Deep, Refined British Narrator'],
+  ['pFZP5JQG7iQjIQuC4Bku', 'Lily - Warm, Friendly, Conversational'],
+  ['pNInz6obpgDQGcFmaJgB', 'Adam - Deep, Authoritative'],
 ];
 
 // ─── State ───────────────────────────────────────────────────────────────────
