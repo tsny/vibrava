@@ -497,45 +497,74 @@ function sentenceRowHtml(s, i) {
   const isSel = S.sel === i;
   const sfxOpts = ['(none)', ...S.sfxFiles];
   const curSfx = s.sound_effect || '(none)';
+  const dur = estimateDuration(s.text);
 
   return `
     <div class="srow${isSel ? ' srow-sel' : ''}" data-si="${i}">
       <div class="srow-num">${i + 1}</div>
       <div class="srow-fields">
         <textarea class="inp stxt" data-si="${i}" rows="3">${esc(s.text || '')}</textarea>
-        <div class="srow-meta">
-          <select class="inp ssfx" data-si="${i}" style="flex:1;min-width:100px">
-            ${sfxOpts.map(f => `<option value="${esc(f)}"${curSfx === f ? ' selected' : ''}>${esc(f)}</option>`).join('')}
-          </select>
+        <div class="srow-controls">
+          <div class="field-group field-group-wide">
+            <span class="field-lbl">Sound Effect</span>
+            <div style="display:flex;gap:4px">
+              <select class="inp ssfx" data-si="${i}" style="flex:1;min-width:80px">
+                ${sfxOpts.map(f => `<option value="${esc(f)}"${curSfx === f ? ' selected' : ''}>${esc(f)}</option>`).join('')}
+              </select>
+              ${s.sound_effect ? `<button class="btn sec ssfxplay" data-si="${i}" title="Play sound effect" style="padding:5px 8px;flex-shrink:0">▶</button>` : ''}
+            </div>
+          </div>
           ${s.sound_effect ? `
-            <button class="btn sec ssfxplay" data-si="${i}" title="Play sound effect" style="padding:5px 8px">▶</button>
-            <input class="inp ssfxofs" type="number" data-si="${i}"
-              value="${s.sfx_offset ?? 0}" min="0" step="0.1" style="width:72px" placeholder="offset s">
-            <input class="inp ssfxdur" type="number" data-si="${i}"
-              value="${s.sfx_duration ?? ''}" min="0" step="0.1" style="width:72px" placeholder="dur s">
+            <div class="field-group field-group-sm">
+              <span class="field-lbl">SFX Offset (s)</span>
+              <input class="inp ssfxofs" type="number" data-si="${i}"
+                value="${s.sfx_offset ?? 0}" min="0" step="0.1">
+            </div>
+            <div class="field-group field-group-sm">
+              <span class="field-lbl">SFX Dur (s)</span>
+              <input class="inp ssfxdur" type="number" data-si="${i}"
+                value="${s.sfx_duration ?? ''}" min="0" step="0.1" placeholder="full">
+            </div>
           ` : ''}
-          <select class="inp svoice" data-si="${i}" style="flex:1;min-width:120px">
-            <option value="">— voice default —</option>
-            ${((S.scriptData?.tts_provider || 'elevenlabs') === 'tiktok' ? TIKTOK_VOICES : ELEVENLABS_VOICES)
-              .map(([id, name]) => `<option value="${esc(id)}"${s.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
-          </select>
-          <input class="inp spause" type="number" data-si="${i}"
-            value="${s.pause_duration ?? ''}" min="0" step="0.1" style="width:72px" placeholder="pause s">
-          <input class="inp spitch" type="number" data-si="${i}"
-            value="${s.pitch_shift ?? ''}" step="0.5" style="width:72px" placeholder="pitch st" title="Pitch shift (semitones)">
-          <input class="inp sspeed" type="number" data-si="${i}"
-            value="${s.speed ?? ''}" min="0.5" max="2.0" step="0.05" style="width:72px" placeholder="speed ×" title="Speed multiplier">
-          <span class="sdur muted" style="font-size:0.8em;white-space:nowrap;align-self:center">${estimateDuration(s.text) !== null ? `~${estimateDuration(s.text)}s` : ''}</span>
+          <div class="field-group field-group-wide">
+            <span class="field-lbl">Voice</span>
+            <select class="inp svoice" data-si="${i}" style="min-width:120px">
+              <option value="">— voice default —</option>
+              ${((S.scriptData?.tts_provider || 'elevenlabs') === 'tiktok' ? TIKTOK_VOICES : ELEVENLABS_VOICES)
+                .map(([id, name]) => `<option value="${esc(id)}"${s.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field-group field-group-sm">
+            <span class="field-lbl">Pause (s)</span>
+            <input class="inp spause" type="number" data-si="${i}"
+              value="${s.pause_duration ?? ''}" min="0" step="0.1" placeholder="—">
+          </div>
+          <div class="field-group field-group-sm">
+            <span class="field-lbl">Pitch (st)</span>
+            <input class="inp spitch" type="number" data-si="${i}"
+              value="${s.pitch_shift ?? ''}" step="0.5" placeholder="—">
+          </div>
+          <div class="field-group field-group-sm">
+            <span class="field-lbl">Speed ×</span>
+            <input class="inp sspeed" type="number" data-si="${i}"
+              value="${s.speed ?? ''}" min="0.5" max="2.0" step="0.05" placeholder="—">
+          </div>
+          <div class="field-group" style="justify-content:flex-end">
+            <span class="sdur muted" style="font-size:0.78em;white-space:nowrap;padding-bottom:6px">${dur !== null ? `~${dur}s` : ''}</span>
+          </div>
         </div>
         ${s.overlay_image ? `
-        <div class="srow-meta" style="margin-top:4px">
-          <span style="color:var(--muted);font-size:0.8em;white-space:nowrap">overlay:</span>
-          <input class="inp sovopa" type="number" data-si="${i}"
-            value="${s.overlay_opacity ?? 1}" min="0" max="1" step="0.05" style="width:72px" title="Opacity (0–1)">
-          <span style="color:var(--muted);font-size:0.8em">opacity</span>
-          <input class="inp sovsize" type="number" data-si="${i}"
-            value="${Math.round((s.overlay_size ?? 1/3) * 100)}" min="1" max="100" step="1" style="width:64px" title="Size % of video width">
-          <span style="color:var(--muted);font-size:0.8em">size %</span>
+        <div class="srow-controls" style="margin-top:4px">
+          <div class="field-group field-group-sm">
+            <span class="field-lbl">Overlay Opacity</span>
+            <input class="inp sovopa" type="number" data-si="${i}"
+              value="${s.overlay_opacity ?? 1}" min="0" max="1" step="0.05">
+          </div>
+          <div class="field-group field-group-sm">
+            <span class="field-lbl">Overlay Size (%)</span>
+            <input class="inp sovsize" type="number" data-si="${i}"
+              value="${Math.round((s.overlay_size ?? 1/3) * 100)}" min="1" max="100" step="1">
+          </div>
         </div>
         ` : ''}
       </div>

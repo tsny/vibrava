@@ -110,7 +110,42 @@ select.inp { cursor: pointer; }
 }
 
 .srow-fields { flex: 1; min-width: 0; }
-.srow-meta { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; align-items: center; }
+
+.srow-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: flex-end;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.field-lbl {
+  font-size: 0.7em;
+  color: var(--muted);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.field-group-sm input,
+.field-group-sm select {
+  width: 72px;
+}
+
+.field-group-wide {
+  flex: 1;
+  min-width: 120px;
+}
+.field-group-wide select,
+.field-group-wide input {
+  width: 100%;
+}
 
 /* ── Thumbnails ─────────────────────────────────────── */
 .sthumb {
@@ -201,7 +236,7 @@ img.cur-img { width: 96px; height: 96px; object-fit: cover; border-radius: 4px; 
 
 /* ── Compact density ────────────────────────────────── */
 #app.compact .srow { padding: 4px 6px; gap: 5px; margin-bottom: 3px; }
-#app.compact .srow-meta { margin-top: 3px; gap: 4px; }
+#app.compact .srow-controls { margin-top: 3px; gap: 4px; }
 #app.compact .srow .thumb { width: 48px !important; height: 48px !important; }
 #app.compact .srow .spick { width: 48px !important; }
 #app.compact .stxt { min-height: 44px; max-height: 80px; }
