@@ -4,20 +4,71 @@ import base64
 import hashlib
 import io
 import json
+import logging
 import mimetypes
 import os
 import sys
+import time
 import tomllib
+import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-7s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("vibrava")
 
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).parent
 SCRIPTS_DIR = ROOT.parent / "scripts"
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
+
+
+def _http_err_msg(exc: Exception) -> str:
+    """Return a readable message from an HTTP API error, extracting JSON body fields where possible."""
+    status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+
+    # ElevenLabs ApiError: .body is already deserialized
+    raw = getattr(exc, "body", None)
+
+    # requests / httpx style: .response.json() or .response.text
+    if raw is None:
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            status = status or getattr(resp, "status_code", None)
+            try:
+                raw = resp.json()
+            except Exception:
+                raw = getattr(resp, "text", None)
+
+    # Try to parse string bodies as JSON
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (ValueError, TypeError):
+            pass
+
+    if isinstance(raw, dict):
+        detail = (
+            raw.get("detail")
+            or raw.get("message")
+            or raw.get("error")
+            or raw.get("msg")
+            or raw.get("description")
+        )
+        body_str = str(detail) if detail else str(raw)
+    elif raw is not None:
+        body_str = str(raw)
+    else:
+        body_str = str(exc)
+
+    return f"HTTP {status}: {body_str}" if status else body_str
 
 
 def load_config() -> dict:
@@ -137,6 +188,17 @@ def render_preview_frame(
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        t0 = time.monotonic()
+        log.info("GET  %s", self.path)
+        try:
+            self._do_GET()
+        except Exception:
+            log.error("Unhandled exception in GET %s\n%s", self.path, traceback.format_exc())
+            self._err(500, "internal server error")
+        else:
+            log.debug("GET  %s → %.0fms", self.path, (time.monotonic() - t0) * 1000)
+
+    def _do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
@@ -221,6 +283,17 @@ class Handler(BaseHTTPRequestHandler):
             self._err(404, "not found")
 
     def do_POST(self):
+        t0 = time.monotonic()
+        log.info("POST %s", self.path)
+        try:
+            self._do_POST()
+        except Exception:
+            log.error("Unhandled exception in POST %s\n%s", self.path, traceback.format_exc())
+            self._err(500, "internal server error")
+        else:
+            log.debug("POST %s → %.0fms", self.path, (time.monotonic() - t0) * 1000)
+
+    def _do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
@@ -229,28 +302,57 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/tts":
             text = body.get("text", "").strip()
-            voice_id = body.get("voice_id", "").strip() or EL_DEFAULT_VOICE
+            provider = body.get("provider", "elevenlabs")
             if not text:
                 return self._err(400, "missing text")
-            if not EL_API_KEY:
-                return self._err(503, "ELEVENLABS_API_KEY not configured")
-            cache_key = hashlib.md5(f"{text}|{voice_id}|{EL_MODEL_ID}".encode()).hexdigest()
+
             cache_dir = CACHE_PATH / "tts"
-            audio_path = cache_dir / f"{cache_key}.mp3"
-            if not audio_path.exists():
-                try:
-                    from elevenlabs.client import ElevenLabs
-                    client = ElevenLabs(api_key=EL_API_KEY)
-                    response = client.text_to_speech.convert_with_timestamps(
-                        voice_id=voice_id,
-                        text=text,
-                        model_id=EL_MODEL_ID,
-                    )
-                    audio_bytes = base64.b64decode(response.audio_base_64)
-                    cache_dir.mkdir(parents=True, exist_ok=True)
-                    audio_path.write_bytes(audio_bytes)
-                except Exception as e:
-                    return self._err(500, str(e))
+
+            if provider == "tiktok":
+                voice_id = body.get("voice_id", "").strip() or "en_us_002"
+                session_id = CONFIG.get("tiktok", {}).get("session_id", "") or os.environ.get("TIKTOK_SESSION_ID", "")
+                if not session_id:
+                    return self._err(503, "tiktok session_id not configured")
+                cache_key = hashlib.md5(f"{text}|{voice_id}|tiktok".encode()).hexdigest()
+                audio_path = cache_dir / f"{cache_key}.mp3"
+                if not audio_path.exists():
+                    log.info("TTS  tiktok generating voice=%s text=%r", voice_id, text[:60])
+                    try:
+                        from tiktok_voice.tts import tts as _tiktok_tts
+                        cache_dir.mkdir(parents=True, exist_ok=True)
+                        _tiktok_tts(session_id, voice_id, text, str(audio_path))
+                    except Exception as e:
+                        msg = _http_err_msg(e)
+                        log.error("TTS  tiktok failed: %s", msg)
+                        return self._err(500, msg)
+                else:
+                    log.info("TTS  tiktok cache hit voice=%s text=%r", voice_id, text[:60])
+            else:
+                voice_id = body.get("voice_id", "").strip() or EL_DEFAULT_VOICE
+                if not EL_API_KEY:
+                    return self._err(503, "ELEVENLABS_API_KEY not configured")
+                cache_key = hashlib.md5(f"{text}|{voice_id}|{EL_MODEL_ID}".encode()).hexdigest()
+                audio_path = cache_dir / f"{cache_key}.mp3"
+                if not audio_path.exists():
+                    log.info("TTS  elevenlabs generating voice=%s text=%r", voice_id, text[:60])
+                    try:
+                        from elevenlabs.client import ElevenLabs
+                        client = ElevenLabs(api_key=EL_API_KEY)
+                        response = client.text_to_speech.convert_with_timestamps(
+                            voice_id=voice_id,
+                            text=text,
+                            model_id=EL_MODEL_ID,
+                        )
+                        audio_bytes = base64.b64decode(response.audio_base_64)
+                        cache_dir.mkdir(parents=True, exist_ok=True)
+                        audio_path.write_bytes(audio_bytes)
+                    except Exception as e:
+                        msg = _http_err_msg(e)
+                        log.error("TTS  elevenlabs failed: %s", msg)
+                        return self._err(500, msg)
+                else:
+                    log.info("TTS  elevenlabs cache hit voice=%s text=%r", voice_id, text[:60])
+
             audio_data = audio_path.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "audio/mpeg")
@@ -308,6 +410,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _err(self, code: int, msg: str):
+        level = logging.ERROR if code >= 500 else logging.WARNING
+        log.log(level, "%d  %s", code, msg)
         body = json.dumps({"error": msg}).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -316,7 +420,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, fmt, *args):
-        pass
+        pass  # suppress default httpd noise; we log manually above
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):

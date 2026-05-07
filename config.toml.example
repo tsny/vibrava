@@ -24,6 +24,9 @@ pause_duration = 0.3   # seconds of silence between segments
 [sfx]
 path = "sfx"           # folder containing sound effect audio files
 
+[tiktok]
+session_id = ""        # or set TIKTOK_SESSION_ID env var
+
 [hooks]
 # Shell command to run after video generation completes.
 on_complete = "paplay /usr/share/sounds/freedesktop/stereo/window-question.oga 2>/dev/null || true"

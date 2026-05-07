@@ -66,9 +66,12 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     provider_name = "tiktok" if use_tiktok else "elevenlabs"
     print(f"[tts]   provider={provider_name}")
     if use_tiktok:
-        tiktok_session_id = os.environ.get("TIKTOK_SESSION_ID", "")
+        tiktok_session_id = config.tiktok_session_id
         if not tiktok_session_id:
-            raise ValueError("TIKTOK_SESSION_ID env var is required for tts_provider=tiktok")
+            raise ValueError(
+                "TikTok session ID is missing. Set TIKTOK_SESSION_ID env var or "
+                "add session_id under [tiktok] in config.toml."
+            )
         voice_id = script.voice_id or os.environ.get("TIKTOK_VOICE_ID", "en_us_002")
     else:
         voice_id = script.voice_id or config.elevenlabs.default_voice_id

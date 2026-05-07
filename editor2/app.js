@@ -32,6 +32,28 @@ const ELEVENLABS_VOICES = [
   ['pNInz6obpgDQGcFmaJgB', 'Adam - Deep, Authoritative'],
 ];
 
+const TIKTOK_VOICES = [
+  ['en_us_001', 'Female (en_us_001)'],
+  ['en_us_002', 'Male (en_us_002)'],
+  ['en_us_006', 'Joey'],
+  ['en_us_007', 'Professor'],
+  ['en_us_009', 'Scientist'],
+  ['en_us_010', 'Confidence'],
+  ['en_male_funny', 'Funny'],
+  ['en_female_emotional', 'Emotional'],
+  ['en_male_m03_lobby', 'Podcast'],
+  ['en_male_m03_sunshine_soon', 'Sunshine Soon'],
+  ['en_us_ghostface', 'Ghostface (Scream)'],
+  ['en_us_chewbacca', 'Chewbacca'],
+  ['en_us_c3po', 'C3PO'],
+  ['en_us_stitch', 'Stitch'],
+  ['en_us_stormtrooper', 'Stormtrooper'],
+  ['en_us_rocket', 'Rocket'],
+  ['en_female_madam_leota', 'Madam Leota'],
+  ['en_male_grinch', 'Grinch'],
+  ['en_male_jarvis', 'Jarvis'],
+];
+
 // ─── State ───────────────────────────────────────────────────────────────────
 
 const S = {
@@ -211,22 +233,12 @@ function renderSidebar() {
         <option value="tiktok"${d.tts_provider === 'tiktok' ? ' selected' : ''}>tiktok</option>
       </select>
 
-      <label class="lbl">Voice ID</label>
-      <input id="ss-voiceid" class="inp" style="width:100%" value="${esc(d.voice_id || '')}"
-        placeholder="${d.tts_provider === 'tiktok' ? 'e.g. en_us_002' : 'e.g. 21m00Tcm4TlvDq8ikWAM'}">
-
-      <details style="margin:8px 0">
-        <summary class="btn sec" style="list-style:none;cursor:pointer;width:100%;text-align:left;padding:5px 12px">🎤 Browse voices</summary>
-        <div style="margin-top:6px;max-height:180px;overflow-y:auto;background:#1a1a1a;border-radius:4px;padding:8px">
-          ${ELEVENLABS_VOICES.map(([id, name]) => `
-            <div style="margin-bottom:8px">
-              <div style="font-size:0.8em;font-weight:600;color:#ccc">${esc(name)}</div>
-              <code class="voice-code" data-vid="${esc(id)}" title="Click to use"
-                style="display:block;font-size:0.75em;background:#252525;padding:2px 6px;border-radius:3px;cursor:pointer;color:#7ec8e3;margin-top:2px">${esc(id)}</code>
-            </div>
-          `).join('')}
-        </div>
-      </details>
+      <label class="lbl">Voice</label>
+      <select id="ss-voiceid" class="inp" style="width:100%">
+        <option value="">— default —</option>
+        ${((d.tts_provider || 'elevenlabs') === 'tiktok' ? TIKTOK_VOICES : ELEVENLABS_VOICES)
+          .map(([id, name]) => `<option value="${esc(id)}"${d.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
+      </select>
 
       <label class="lbl">Caption style</label>
       <select id="ss-caption" class="inp" style="width:100%">
@@ -289,19 +301,12 @@ function bindSidebar() {
 
   document.getElementById('ss-provider')?.addEventListener('change', e => {
     S.scriptData.tts_provider = e.target.value;
+    S.scriptData.voice_id = null;
+    updateVoiceDropdowns();
   });
 
-  document.getElementById('ss-voiceid')?.addEventListener('input', e => {
+  document.getElementById('ss-voiceid')?.addEventListener('change', e => {
     S.scriptData.voice_id = e.target.value || null;
-  });
-
-  document.querySelectorAll('.voice-code').forEach(el => {
-    el.addEventListener('click', () => {
-      const id = el.dataset.vid;
-      const inp = document.getElementById('ss-voiceid');
-      if (inp) { inp.value = id; S.scriptData.voice_id = id; }
-      navigator.clipboard?.writeText(id);
-    });
   });
 
   document.getElementById('ss-caption')?.addEventListener('change', e => {
@@ -352,6 +357,23 @@ function bindSidebar() {
   });
 }
 
+function updateVoiceDropdowns() {
+  const isTiktok = (S.scriptData?.tts_provider || 'elevenlabs') === 'tiktok';
+  const voices = isTiktok ? TIKTOK_VOICES : ELEVENLABS_VOICES;
+  const defaultOpt = '<option value="">— default —</option>';
+  const opts = voices.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('');
+
+  const globalSel = document.getElementById('ss-voiceid');
+  if (globalSel) globalSel.innerHTML = defaultOpt + opts;
+
+  document.querySelectorAll('.svoice').forEach(sel => {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— voice default —</option>' + opts;
+    // keep selection if same voice exists in new list
+    if (voices.some(([id]) => id === cur)) sel.value = cur;
+  });
+}
+
 // ─── Sentences panel ─────────────────────────────────────────────────────────
 
 function renderSentences() {
@@ -397,7 +419,8 @@ function sentenceRowHtml(s, i) {
           ` : ''}
           <select class="inp svoice" data-si="${i}" style="flex:1;min-width:120px">
             <option value="">— voice default —</option>
-            ${ELEVENLABS_VOICES.map(([id, name]) => `<option value="${esc(id)}"${s.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
+            ${((S.scriptData?.tts_provider || 'elevenlabs') === 'tiktok' ? TIKTOK_VOICES : ELEVENLABS_VOICES)
+              .map(([id, name]) => `<option value="${esc(id)}"${s.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
           </select>
           <input class="inp spause" type="number" data-si="${i}"
             value="${s.pause_duration ?? ''}" min="0" step="0.1" style="width:72px" placeholder="pause s">
@@ -459,7 +482,7 @@ function handleSentenceClick(e) {
     fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice_id: voiceId }),
+      body: JSON.stringify({ text, voice_id: voiceId, provider: S.scriptData?.tts_provider || 'elevenlabs' }),
     }).then(r => {
       if (!r.ok) return r.json().then(d => { throw new Error(d.error || r.status); });
       return r.blob();

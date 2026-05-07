@@ -20,6 +20,7 @@ class Config:
     pause_duration: float
     sfx_path: Path
     on_complete: str | None
+    tiktok_session_id: str
 
 
 def load(path: Path = Path("config.toml")) -> Config:
@@ -45,4 +46,7 @@ def load(path: Path = Path("config.toml")) -> Config:
         pause_duration=raw.get("compose", {}).get("pause_duration", 0.3),
         sfx_path=Path(raw.get("sfx", {}).get("path", "sfx")),
         on_complete=raw.get("hooks", {}).get("on_complete", None),
+        tiktok_session_id=os.environ.get(
+            "TIKTOK_SESSION_ID", raw.get("tiktok", {}).get("session_id", "")
+        ),
     )
