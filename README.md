@@ -39,13 +39,27 @@ Scripts are JSON files in `scripts/`. Example (`cat_story` mode):
   "music": "spooky.mp3",
   "output_filename": "out.mp4",
   "resolution": [1080, 1920],
+  "sfx_volume": 1.0,
   "sentences": [
-    { "id": "s1", "text": "Once upon a time..." }
+    {
+      "id": "s1",
+      "text": "Once upon a time...",
+      "sound_effect": "whoosh.mp3",
+      "sfx_offset": 0.0,
+      "sfx_duration": null,
+      "sfx_volume": 0.8
+    }
   ]
 }
 ```
 
 `caption_style` options: `"word"` (word-by-word highlight), `"line"` (full sentence), `"none"`.
+
+Top-level `sfx_volume` (0.0–2.0, default `1.0`) sets the default volume for all sound effects. Per-sentence `sfx_volume` overrides it for that sentence.
+
+## Encoder
+
+The pipeline auto-selects the best available H.264 encoder at render time: `h264_nvenc` (NVIDIA) → `h264_videotoolbox` (Apple) → `libx264` (CPU fallback). No configuration needed.
 
 ## Script Editor
 
