@@ -1,5 +1,6 @@
 import multiprocessing
 import random
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -48,6 +49,28 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 
 _PADDING = 0.90
+
+# ---------------------------------------------------------------------------
+# Encoder detection
+# ---------------------------------------------------------------------------
+
+def _find_encoder() -> tuple[str, str, list[str]]:
+    """Return (codec, preset, extra_ffmpeg_params) for the best available H.264 encoder."""
+    try:
+        out = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+    except Exception:
+        out = ""
+    if "h264_nvenc" in out:
+        print("[compose] encoder: h264_nvenc")
+        return "h264_nvenc", "fast", ["-rc", "vbr", "-cq", "23"]
+    if "h264_videotoolbox" in out:
+        print("[compose] encoder: h264_videotoolbox")
+        return "h264_videotoolbox", "fast", []
+    print("[compose] encoder: libx264 (ultrafast)")
+    return "libx264", "ultrafast", ["-tune", "stillimage"]
 
 # ---------------------------------------------------------------------------
 # Frame builders
@@ -350,47 +373,42 @@ def build(
         elif audio_clip:
             video_clip = video_clip.set_audio(audio_clip)
 
-        # Captions
+        # Collect overlay layers for a single composite at the end of the sentence.
+        # Avoids wrapping CompositeVideoClip inside another CompositeVideoClip.
+        layers = [video_clip]
+
         if caption_style == "line" and sentence.text.strip():
             caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
-            caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
-            video_clip = CompositeVideoClip([video_clip, caption_clip])
+            layers.append(ImageClip(caption_frame, ismask=False).set_duration(audio_duration))
 
         elif caption_style == "word":
             if not seg.words:
                 # No word timestamps (e.g. TikTok TTS or empty sentence) — fall back to line captions
                 if sentence.text.strip():
                     caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
-                    caption_clip = ImageClip(caption_frame, ismask=False).set_duration(audio_duration)
-                    video_clip = CompositeVideoClip([video_clip, caption_clip])
+                    layers.append(ImageClip(caption_frame, ismask=False).set_duration(audio_duration))
             else:
                 font, positions = _build_caption_layout(seg.words, width, height, caption_font_size, caption_y_pct)
-                caption_clips = []
                 for i, word in enumerate(seg.words):
                     end = seg.words[i + 1].start if i + 1 < len(seg.words) else audio_duration
-                    duration = max(end - word.start, 0.05)
-                    frame_arr = _render_caption_word(seg.words, i, width, height, font, positions)
-                    wclip = (
-                        ImageClip(frame_arr, ismask=False)
+                    layers.append(
+                        ImageClip(_render_caption_word(seg.words, i, width, height, font, positions), ismask=False)
                         .set_start(word.start)
-                        .set_duration(duration)
+                        .set_duration(max(end - word.start, 0.05))
                     )
-                    caption_clips.append(wclip)
-                video_clip = CompositeVideoClip([video_clip] + caption_clips)
 
         # Per-sentence overlay — centered, alpha ramps to target by the midpoint
         ov_entry = (sentence_overlay_map or {}).get(sentence.id)
         if ov_entry:
             ov_path, ov_opacity, ov_size = ov_entry
-            ov_clip = _make_overlay_clip(
+            layers.append(_make_overlay_clip(
                 ov_path, width, height, total_duration,
                 size_frac=ov_size, opacity=ov_opacity,
                 fade_in=total_duration / 2,
                 centered=True,
-            )
-            video_clip = CompositeVideoClip([video_clip, ov_clip])
+            ))
 
-        clips.append(video_clip)
+        clips.append(CompositeVideoClip(layers) if len(layers) > 1 else video_clip)
 
     final = concatenate_videoclips(clips, method="compose")
 
@@ -406,15 +424,18 @@ def build(
         else:
             music = music.subclip(0, music_duration)
         music = music.set_start(music_start)
-        final = final.set_audio(CompositeAudioClip([final.audio, music]))
+        base_audio = ([final.audio] if final.audio is not None else [])
+        final = final.set_audio(CompositeAudioClip(base_audio + [music]))
 
+    codec, preset, extra_params = _find_encoder()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     final.write_videofile(
         str(output_path),
         fps=fps,
-        codec="libx264",
+        codec=codec,
         audio_codec="aac",
-        preset="ultrafast",
+        preset=preset,
+        ffmpeg_params=extra_params,
         threads=multiprocessing.cpu_count(),
         logger="bar",
     )
