@@ -54,21 +54,28 @@ _PADDING = 0.90
 # Encoder detection
 # ---------------------------------------------------------------------------
 
+def _codec_works(codec: str) -> bool:
+    """Return True if ffmpeg can actually encode with this codec (not just list it)."""
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-f", "lavfi", "-i", "color=black:s=16x16:d=0.1",
+             "-c:v", codec, "-f", "null", "-"],
+            capture_output=True, timeout=10,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 def _find_encoder() -> tuple[str, str, list[str]]:
     """Return (codec, preset, extra_ffmpeg_params) for the best available H.264 encoder."""
-    try:
-        out = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-encoders"],
-            capture_output=True, text=True, timeout=5,
-        ).stdout
-    except Exception:
-        out = ""
-    if "h264_nvenc" in out:
-        print("[compose] encoder: h264_nvenc")
-        return "h264_nvenc", "fast", []
-    if "h264_videotoolbox" in out:
-        print("[compose] encoder: h264_videotoolbox")
-        return "h264_videotoolbox", "fast", []
+    for codec, preset, params in [
+        ("h264_nvenc",        "fast",      []),
+        ("h264_videotoolbox", "fast",      []),
+    ]:
+        if _codec_works(codec):
+            print(f"[compose] encoder: {codec}")
+            return codec, preset, params
     print("[compose] encoder: libx264 (ultrafast)")
     return "libx264", "ultrafast", ["-tune", "stillimage"]
 
