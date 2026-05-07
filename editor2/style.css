@@ -179,3 +179,29 @@ img.cur-img { width: 96px; height: 96px; object-fit: cover; border-radius: 4px; 
 /* ── Pagination ─────────────────────────────────────── */
 .pager { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .pager span { flex: 1; text-align: center; font-size: 0.82em; color: var(--muted); }
+
+/* ── Settings modal ─────────────────────────────────── */
+#settings-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+#settings-modal.open { display: flex; }
+.settings-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 280px;
+}
+
+/* ── Compact density ────────────────────────────────── */
+#app.compact .srow { padding: 4px 6px; gap: 5px; margin-bottom: 3px; }
+#app.compact .srow-meta { margin-top: 3px; gap: 4px; }
+#app.compact .srow .thumb { width: 48px !important; height: 48px !important; }
+#app.compact .srow .spick { width: 48px !important; }
+#app.compact .stxt { min-height: 44px; max-height: 80px; }

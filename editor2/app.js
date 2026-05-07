@@ -73,6 +73,7 @@ const S = {
   typeFilter: 'all',
   page: 0,
   saveStatus: '',
+  density: localStorage.getItem('vibrava_density') || 'spacious',
 };
 
 const videoCache = new Map();
@@ -213,7 +214,10 @@ async function fillVideoThumbs(container) {
 function renderSidebar() {
   const d = S.scriptData;
   document.getElementById('sidebar').innerHTML = `
-    <h2 style="font-size:1em;font-weight:700;margin-bottom:12px;color:#ccc">Vibrava Editor</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 style="font-size:1em;font-weight:700;color:#ccc">Vibrava Editor</h2>
+      <button id="settings-btn" class="btn sec" style="padding:3px 8px;font-size:0.85em" title="Settings">⚙️</button>
+    </div>
 
     <label class="lbl">Script</label>
     ${S.scripts.length
@@ -264,6 +268,13 @@ function renderSidebar() {
       <label class="lbl">Music file</label>
       <input id="ss-music" class="inp" style="width:100%" value="${esc(d.music || '')}">
 
+      <label class="lbl">Music volume</label>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input id="ss-musicvol" type="range" min="0" max="1" step="0.01" style="flex:1"
+          value="${d.music_volume ?? 0.15}">
+        <span id="ss-musicvol-val" style="color:#ccc;font-size:0.85em;min-width:36px;text-align:right">${Math.round((d.music_volume ?? 0.15) * 100)}%</span>
+      </div>
+
       <label class="lbl">Overlay image</label>
       <div style="display:flex;gap:6px">
         <input id="ss-overlay" class="inp" style="flex:1;min-width:0" value="${esc(d.overlay_image || '')}" placeholder="e.g. watermark.png">
@@ -280,7 +291,55 @@ function renderSidebar() {
   bindSidebar();
 }
 
+// ─── Settings modal ──────────────────────────────────────────────────────────
+
+function applyDensity() {
+  document.getElementById('app').classList.toggle('compact', S.density === 'compact');
+  localStorage.setItem('vibrava_density', S.density);
+}
+
+function openSettings() {
+  let modal = document.getElementById('settings-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'settings-modal';
+    modal.addEventListener('click', e => { if (e.target === modal) closeSettings(); });
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="settings-box">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <strong style="font-size:1em">Settings</strong>
+        <button id="settings-close" class="btn sec" style="padding:2px 8px">✕</button>
+      </div>
+      <label class="lbl" style="margin-top:0">Sentence density</label>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn ${S.density === 'spacious' ? 'pri' : 'sec'} density-btn" data-density="spacious" style="flex:1">Spacious</button>
+        <button class="btn ${S.density === 'compact' ? 'pri' : 'sec'} density-btn" data-density="compact" style="flex:1">Compact</button>
+      </div>
+    </div>
+  `;
+  modal.classList.add('open');
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  modal.querySelectorAll('.density-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      S.density = btn.dataset.density;
+      applyDensity();
+      modal.querySelectorAll('.density-btn').forEach(b => {
+        b.classList.toggle('pri', b.dataset.density === S.density);
+        b.classList.toggle('sec', b.dataset.density !== S.density);
+      });
+    });
+  });
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal')?.classList.remove('open');
+}
+
 function bindSidebar() {
+  document.getElementById('settings-btn')?.addEventListener('click', openSettings);
+
   document.getElementById('ss-select')?.addEventListener('change', async e => {
     await loadScript(e.target.value);
     renderSidebar();
@@ -333,6 +392,13 @@ function bindSidebar() {
 
   document.getElementById('ss-music')?.addEventListener('input', e => {
     S.scriptData.music = e.target.value || null;
+  });
+
+  document.getElementById('ss-musicvol')?.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    S.scriptData.music_volume = v;
+    const span = document.getElementById('ss-musicvol-val');
+    if (span) span.textContent = Math.round(v * 100) + '%';
   });
 
   document.getElementById('ss-overlay')?.addEventListener('input', e => {
@@ -544,7 +610,6 @@ function handleSentenceClick(e) {
     if (S.sel === i && S.slot === slot) {
       S.sel = null;
     } else {
-      if (S.sel !== i) S.page = 0;
       S.sel = i;
       S.slot = slot;
     }
@@ -901,6 +966,7 @@ async function init() {
   S.scripts = scripts;
   S.clips = clips;
   S.sfxFiles = sfxFiles;
+  applyDensity();
 
   if (S.scripts.length) {
     const urlScript = new URLSearchParams(location.search).get('script');
