@@ -65,7 +65,7 @@ def _find_encoder() -> tuple[str, str, list[str]]:
         out = ""
     if "h264_nvenc" in out:
         print("[compose] encoder: h264_nvenc")
-        return "h264_nvenc", "fast", ["-rc", "vbr", "-cq", "23"]
+        return "h264_nvenc", "fast", []
     if "h264_videotoolbox" in out:
         print("[compose] encoder: h264_videotoolbox")
         return "h264_videotoolbox", "fast", []
