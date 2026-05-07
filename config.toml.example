@@ -18,9 +18,6 @@ path = "cache"
 [output]
 path = "output"
 
-[compose]
-pause_duration = 0.3   # seconds of silence between segments
-
 [sfx]
 path = "sfx"           # folder containing sound effect audio files
 

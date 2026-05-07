@@ -76,11 +76,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     else:
         voice_id = script.voice_id or config.elevenlabs.default_voice_id
 
-    pause_duration = (
-        script.pause_duration
-        if script.pause_duration is not None
-        else config.pause_duration
-    )
+    pause_duration = script.pause_duration if script.pause_duration is not None else 0.3
 
     audio_map = {}
     image_map: dict[str, list[Path | None]] = {}
