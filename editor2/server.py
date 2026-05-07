@@ -353,9 +353,25 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     log.info("TTS  elevenlabs cache hit voice=%s text=%r", voice_id, text[:60])
 
+            pitch_shift = float(body.get("pitch_shift", 0.0))
+            speed = float(body.get("speed", 1.0))
+            if pitch_shift != 0.0 or speed != 1.0:
+                from vibrava.audio.fx import apply as fx_apply
+                from vibrava.audio.tts import AudioSegment
+                seg = fx_apply(
+                    AudioSegment(path=audio_path, duration=0.0, words=[]),
+                    pitch_shift=pitch_shift,
+                    speed=speed,
+                    cache_dir=CACHE_PATH / "fx",
+                )
+                audio_path = seg.path
+                content_type = "audio/wav"
+            else:
+                content_type = "audio/mpeg"
+
             audio_data = audio_path.read_bytes()
             self.send_response(200)
-            self.send_header("Content-Type", "audio/mpeg")
+            self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", len(audio_data))
             self.end_headers()
             self.wfile.write(audio_data)

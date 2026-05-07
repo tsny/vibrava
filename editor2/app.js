@@ -109,6 +109,12 @@ const libUrl = f => `/lib/${f.split('/').map(encodeURIComponent).join('/')}`;
 const sfxUrl = f => `/sfx/${f.split('/').map(encodeURIComponent).join('/')}`;
 const isVideo = f => VIDEO_EXTS.has(ext(f));
 
+function estimateDuration(text) {
+  const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
+  if (!words) return null;
+  return (words / 2.5).toFixed(1);
+}
+
 function nextId(sentences) {
   const used = new Set(sentences.map(s => String(s.id || '')));
   const nums = [...used].filter(id => /^s\d+$/.test(id)).map(id => +id.slice(1));
@@ -275,6 +281,17 @@ function renderSidebar() {
         <span id="ss-musicvol-val" style="color:#ccc;font-size:0.85em;min-width:36px;text-align:right">${Math.round((d.music_volume ?? 0.15) * 100)}%</span>
       </div>
 
+      <label class="lbl">Pitch shift (semitones, 0 = off)</label>
+      <input id="ss-pitch" class="inp" type="number" step="0.5" style="width:100%"
+        value="${d.pitch_shift ?? 0}" placeholder="0">
+
+      <label class="lbl">Speed</label>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input id="ss-speed" type="range" min="0.5" max="2.0" step="0.05" style="flex:1"
+          value="${d.speed ?? 1.0}">
+        <span id="ss-speed-val" style="color:#ccc;font-size:0.85em;min-width:36px;text-align:right">${((d.speed ?? 1.0)).toFixed(2)}×</span>
+      </div>
+
       <label class="lbl">Overlay image</label>
       <div style="display:flex;gap:6px">
         <input id="ss-overlay" class="inp" style="flex:1;min-width:0" value="${esc(d.overlay_image || '')}" placeholder="e.g. watermark.png">
@@ -401,6 +418,18 @@ function bindSidebar() {
     if (span) span.textContent = Math.round(v * 100) + '%';
   });
 
+  document.getElementById('ss-pitch')?.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    S.scriptData.pitch_shift = isNaN(v) ? 0.0 : v;
+  });
+
+  document.getElementById('ss-speed')?.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    S.scriptData.speed = isNaN(v) ? 1.0 : v;
+    const span = document.getElementById('ss-speed-val');
+    if (span) span.textContent = v.toFixed(2) + '×';
+  });
+
   document.getElementById('ss-overlay')?.addEventListener('input', e => {
     S.scriptData.overlay_image = e.target.value || null;
   });
@@ -492,6 +521,11 @@ function sentenceRowHtml(s, i) {
           </select>
           <input class="inp spause" type="number" data-si="${i}"
             value="${s.pause_duration ?? ''}" min="0" step="0.1" style="width:72px" placeholder="pause s">
+          <input class="inp spitch" type="number" data-si="${i}"
+            value="${s.pitch_shift ?? ''}" step="0.5" style="width:72px" placeholder="pitch st" title="Pitch shift (semitones)">
+          <input class="inp sspeed" type="number" data-si="${i}"
+            value="${s.speed ?? ''}" min="0.5" max="2.0" step="0.05" style="width:72px" placeholder="speed ×" title="Speed multiplier">
+          <span class="sdur muted" style="font-size:0.8em;white-space:nowrap;align-self:center">${estimateDuration(s.text) !== null ? `~${estimateDuration(s.text)}s` : ''}</span>
         </div>
         ${s.overlay_image ? `
         <div class="srow-meta" style="margin-top:4px">
@@ -545,12 +579,14 @@ function handleSentenceClick(e) {
     if (!text) return;
     const voiceInput = document.querySelector(`.svoice[data-si="${i}"]`);
     const voiceId = voiceInput?.value?.trim() || S.scriptData?.voice_id || '';
+    const pitchShift = s.pitch_shift ?? S.scriptData?.pitch_shift ?? 0;
+    const speed = s.speed ?? S.scriptData?.speed ?? 1.0;
     playTts.textContent = '⏳';
     playTts.disabled = true;
     fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice_id: voiceId, provider: S.scriptData?.tts_provider || 'elevenlabs' }),
+      body: JSON.stringify({ text, voice_id: voiceId, provider: S.scriptData?.tts_provider || 'elevenlabs', pitch_shift: pitchShift, speed }),
     }).then(r => {
       if (!r.ok) return r.json().then(d => { throw new Error(d.error || r.status); });
       return r.blob();
@@ -642,10 +678,18 @@ function handleSentenceInput(e) {
   const s = S.scriptData.sentences[+si];
   if (!s) return;
 
-  if (e.target.classList.contains('stxt'))     s.text = e.target.value;
+  if (e.target.classList.contains('stxt')) {
+    s.text = e.target.value;
+    const dur = estimateDuration(s.text);
+    const row = e.target.closest('.srow');
+    const badge = row?.querySelector('.sdur');
+    if (badge) badge.textContent = dur !== null ? `~${dur}s` : '';
+  }
   if (e.target.classList.contains('ssfxofs'))  s.sfx_offset = parseFloat(e.target.value) || 0;
   if (e.target.classList.contains('ssfxdur'))  { const v = parseFloat(e.target.value); s.sfx_duration = isNaN(v) || e.target.value === '' ? null : v; }
   if (e.target.classList.contains('spause'))   { const v = parseFloat(e.target.value); s.pause_duration = isNaN(v) ? null : v; }
+  if (e.target.classList.contains('spitch'))   { const v = parseFloat(e.target.value); s.pitch_shift = isNaN(v) || e.target.value === '' ? null : v; }
+  if (e.target.classList.contains('sspeed'))   { const v = parseFloat(e.target.value); s.speed = isNaN(v) || e.target.value === '' ? null : v; }
   if (e.target.classList.contains('sovopa'))   { const v = parseFloat(e.target.value); s.overlay_opacity = isNaN(v) ? 1.0 : Math.max(0, Math.min(1, v)); }
   if (e.target.classList.contains('sovsize'))  { const v = parseFloat(e.target.value); s.overlay_size = isNaN(v) ? 1/3 : Math.max(1, Math.min(100, v)) / 100; }
 }

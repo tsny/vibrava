@@ -17,6 +17,8 @@ class Sentence:
     overlay_image: str | None = None   # per-sentence overlay image (relative to library root)
     overlay_opacity: float = 1.0       # 0.0–1.0; alpha ramps up to this over the first half of the sentence
     overlay_size: float = 1/3          # fraction of video width
+    pitch_shift: float | None = None   # semitones; overrides script-level when set
+    speed: float | None = None         # multiplier (e.g. 1.2 = 20% faster); overrides script-level
 
 
 @dataclass
@@ -37,6 +39,8 @@ class VideoScript:
     overlay_image_size: float = 1/6    # fraction of video width (0.0–1.0)
     caption_font_size: int | None = None  # px at original resolution; None = auto (height // 26)
     caption_y_pct: float = 80.0           # vertical position as % of frame height (0 = top, 100 = bottom)
+    pitch_shift: float = 0.0              # semitones applied to all sentences (0 = off)
+    speed: float = 1.0                    # playback speed multiplier applied to all sentences
 
 
 def _next_sentence_id(raw_sentences: list[dict]) -> str:
@@ -80,6 +84,8 @@ def parse(path: Path) -> VideoScript:
             overlay_image=s.get("overlay_image"),
             overlay_opacity=float(s.get("overlay_opacity", 1.0)),
             overlay_size=float(s.get("overlay_size", 1/3)),
+            pitch_shift=float(s["pitch_shift"]) if s.get("pitch_shift") is not None else None,
+            speed=float(s["speed"]) if s.get("speed") is not None else None,
         )
         for s in data["sentences"]
     ]
@@ -93,8 +99,8 @@ def parse(path: Path) -> VideoScript:
         resolution=(res[0], res[1]),
         pause_duration=data.get("pause_duration"),
         music=data.get("music"),
-        music_volume=data.get("music_volume", 0.15),
-        music_start=data.get("music_start", 0.0),
+        music_volume=float(data.get("music_volume", 0.15)),
+        music_start=float(data.get("music_start", 0.0)),
         random_fallback=data.get("random_fallback", False),
         pause_jitter=min(data.get("pause_jitter", 0.0), 1.0),
         tts_provider=data.get("tts_provider", "elevenlabs"),
@@ -102,4 +108,6 @@ def parse(path: Path) -> VideoScript:
         overlay_image_size=float(data.get("overlay_image_size", 1/6)),
         caption_font_size=data.get("caption_font_size") or None,
         caption_y_pct=float(data.get("caption_y_pct", 80.0)),
+        pitch_shift=float(data.get("pitch_shift", 0.0)),
+        speed=float(data.get("speed", 1.0)),
     )

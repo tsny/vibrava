@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from vibrava.audio import elevenlabs as tts_elevenlabs
+from vibrava.audio import fx as audio_fx
 from vibrava.audio import tiktok as tts_tiktok
 from vibrava.audio.tts import AudioSegment
 from vibrava.clips.index import ClipIndex
@@ -112,6 +113,15 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
                 model_id=config.elevenlabs.model_id,
                 api_key=config.elevenlabs.api_key,
                 cache_dir=cache_dir,
+            )
+        eff_pitch = sentence.pitch_shift if sentence.pitch_shift is not None else script.pitch_shift
+        eff_speed = sentence.speed if sentence.speed is not None else script.speed
+        if eff_pitch != 0.0 or eff_speed != 1.0:
+            seg = audio_fx.apply(
+                seg,
+                pitch_shift=eff_pitch,
+                speed=eff_speed,
+                cache_dir=config.cache_path / "fx",
             )
         audio_map[sentence.id] = seg
 
