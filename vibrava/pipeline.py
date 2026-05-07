@@ -38,6 +38,45 @@ def _resolve_mood_provider() -> str | None:
     return None
 
 
+def _match_image(
+    sentence,
+    index: ClipIndex,
+    random_fallback: bool,
+    mood_enabled: bool,
+    mood_provider: str | None,
+    mood_cache_dir: Path,
+) -> tuple[Path | None, list[str], str]:
+    """Resolve the primary image for a sentence.
+
+    Returns (img_path, inferred_moods, label).  img_path is None when no
+    match is found and random_fallback is disabled.
+    """
+    if sentence.image:
+        return index.library_dir / sentence.image, [], f"{Path(sentence.image).name} (pinned)"
+
+    img_path = matcher.match(sentence.text, index)
+    inferred_moods: list[str] = []
+
+    if img_path is None and mood_enabled and mood_provider:
+        inferred_moods = _infer_moods_with_retry(
+            sentence.text,
+            cache_dir=mood_cache_dir,
+            provider=mood_provider,
+        )
+        if inferred_moods:
+            img_path = matcher.match_with_tags(
+                sentence.text, index, mood.mood_tags(inferred_moods)
+            )
+
+    if img_path is None and random_fallback and index._clips:
+        entry = random.choice(index._clips)
+        img_path = index.resolve_path(entry)
+        return img_path, inferred_moods, f"{img_path.name} (random)"
+
+    label = img_path.name if img_path else "no match"
+    return img_path, inferred_moods, label
+
+
 def _infer_moods_with_retry(
     text: str,
     cache_dir: Path,
@@ -125,30 +164,10 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
             )
         audio_map[sentence.id] = seg
 
-        inferred_moods: list[str] = []
-        if sentence.image:
-            img_path = index.library_dir / sentence.image
-            label = f"{Path(sentence.image).name} (pinned)"
-        else:
-            img_path = matcher.match(sentence.text, index)
-            if img_path is None and mood_enabled:
-                inferred_moods = _infer_moods_with_retry(
-                    sentence.text,
-                    cache_dir=mood_cache_dir,
-                    provider=mood_provider,
-                )
-                if inferred_moods:
-                    img_path = matcher.match_with_tags(
-                        sentence.text, index, mood.mood_tags(inferred_moods)
-                    )
-            if img_path is None and script.random_fallback and index._clips:
-                entry = random.choice(index._clips)
-                img_path = index.resolve_path(entry)
-                label = f"{img_path.name} (random)"
-            elif img_path:
-                label = img_path.name
-            else:
-                label = "no match"
+        img_path, inferred_moods, label = _match_image(
+            sentence, index, script.random_fallback,
+            mood_enabled, mood_provider, mood_cache_dir,
+        )
 
         img2_path = (index.library_dir / sentence.image2) if sentence.image2 else None
         image_map[sentence.id] = [img_path, img2_path]
@@ -264,32 +283,13 @@ def _resolve_video_script(script_path: Path, config: Config) -> None:
 
     resolved_images: list[str | None] = []
     for sentence in script.sentences:
-        if sentence.image:
-            image_val = sentence.image
-            label = f"{Path(sentence.image).name} (pinned)"
-        else:
-            img_path = matcher.match(sentence.text, index)
-            if img_path is None and mood_enabled:
-                moods = _infer_moods_with_retry(
-                    sentence.text,
-                    cache_dir=mood_cache_dir,
-                    provider=mood_provider,
-                )
-                if moods:
-                    print(f"[mood]  {', '.join(moods)}")
-                    img_path = matcher.match_with_tags(
-                        sentence.text, index, mood.mood_tags(moods)
-                    )
-            if img_path is None and script.random_fallback and index._clips:
-                entry = random.choice(index._clips)
-                img_path = index.resolve_path(entry)
-                label = f"{img_path.name} (random fallback)"
-            elif img_path:
-                label = img_path.name
-            else:
-                label = "no match"
-            image_val = str(img_path.relative_to(index.library_dir)) if img_path else None
-
+        img_path, moods, label = _match_image(
+            sentence, index, script.random_fallback,
+            mood_enabled, mood_provider, mood_cache_dir,
+        )
+        if moods:
+            print(f"[mood]  {', '.join(moods)}")
+        image_val = str(img_path.relative_to(index.library_dir)) if img_path else None
         resolved_images.append(image_val)
         preview = sentence.text[:60] + ("..." if len(sentence.text) > 60 else "")
         print(f"[match] {preview} → {label}")
