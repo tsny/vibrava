@@ -189,14 +189,8 @@ def _make_video_clip(video_path: Path, width: int, height: int, duration: float)
     scale = min(width / clip.w, height / clip.h) * _PADDING
     new_w, new_h = int(clip.w * scale), int(clip.h * scale)
     x, y = (width - new_w) // 2, (height - new_h) // 2
-
-    def _place_frame(frame):
-        resized = np.array(Image.fromarray(frame.astype("uint8")).resize((new_w, new_h), Image.LANCZOS))
-        bg = np.zeros((height, width, 3), dtype="uint8")
-        bg[y:y + new_h, x:x + new_w] = resized
-        return bg
-
-    return clip.fl_image(_place_frame)
+    bg = ColorClip(size=(width, height), color=(0, 0, 0)).set_duration(clip.duration)
+    return CompositeVideoClip([bg, clip.resize((new_w, new_h)).set_position((x, y))])
 
 
 def _make_gif_clip(gif_path: Path, width: int, height: int, duration: float):
