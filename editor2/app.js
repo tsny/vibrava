@@ -39,6 +39,8 @@ const TIKTOK_VOICES = [
   ['en_us_007', 'Professor'],
   ['en_us_009', 'Scientist'],
   ['en_us_010', 'Confidence'],
+  ['en_whisper', 'Whisper'],
+  ['en_male_narration', 'Story Teller'],
   ['en_male_funny', 'Funny'],
   ['en_female_emotional', 'Emotional'],
   ['en_male_m03_lobby', 'Podcast'],
