@@ -80,6 +80,7 @@ const videoCache = new Map();
 const imgBlobCache = new Map(); // file → blob URL
 const sfxAudio = new Audio();
 const ttsAudio = new Audio();
+let sfxPreviewTimeout = null;
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
@@ -525,6 +526,11 @@ function sentenceRowHtml(s, i) {
               <input class="inp ssfxdur" type="number" data-si="${i}"
                 value="${s.sfx_duration ?? ''}" min="0" step="0.1" placeholder="full">
             </div>
+            <div class="field-group field-group-sm">
+              <span class="field-lbl">SFX Vol</span>
+              <input class="inp ssfxvol" type="number" data-si="${i}"
+                value="${s.sfx_volume ?? ''}" min="0" max="2" step="0.05" placeholder="—">
+            </div>
           ` : ''}
           <div class="field-group field-group-wide">
             <span class="field-lbl">Voice</span>
@@ -623,7 +629,18 @@ function handleSentenceClick(e) {
       const url = URL.createObjectURL(blob);
       ttsAudio.pause();
       ttsAudio.src = url;
+      clearTimeout(sfxPreviewTimeout);
+      sfxAudio.pause();
       ttsAudio.play().catch(err => console.warn('TTS playback failed:', err));
+      if (s.sound_effect) {
+        const offset = (s.sfx_offset ?? 0) * 1000;
+        const vol = s.sfx_volume ?? S.scriptData?.sfx_volume ?? 1.0;
+        sfxPreviewTimeout = setTimeout(() => {
+          sfxAudio.src = sfxUrl(s.sound_effect);
+          sfxAudio.volume = Math.max(0, Math.min(2, vol));
+          sfxAudio.play().catch(err => console.warn('SFX playback failed:', err));
+        }, offset);
+      }
     }).catch(err => {
       alert('TTS failed: ' + err.message);
     }).finally(() => {
@@ -716,6 +733,7 @@ function handleSentenceInput(e) {
   }
   if (e.target.classList.contains('ssfxofs'))  s.sfx_offset = parseFloat(e.target.value) || 0;
   if (e.target.classList.contains('ssfxdur'))  { const v = parseFloat(e.target.value); s.sfx_duration = isNaN(v) || e.target.value === '' ? null : v; }
+  if (e.target.classList.contains('ssfxvol'))  { const v = parseFloat(e.target.value); s.sfx_volume = isNaN(v) || e.target.value === '' ? null : v; }
   if (e.target.classList.contains('spause'))   { const v = parseFloat(e.target.value); s.pause_duration = isNaN(v) ? null : v; }
   if (e.target.classList.contains('spitch'))   { const v = parseFloat(e.target.value); s.pitch_shift = isNaN(v) || e.target.value === '' ? null : v; }
   if (e.target.classList.contains('sspeed'))   { const v = parseFloat(e.target.value); s.speed = isNaN(v) || e.target.value === '' ? null : v; }

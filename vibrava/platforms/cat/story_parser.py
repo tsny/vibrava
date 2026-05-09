@@ -10,6 +10,7 @@ class Sentence:
     sound_effect: str | None = None
     sfx_offset: float = 0.0       # seconds from start of sentence when sfx plays
     sfx_duration: float | None = None  # seconds to play; None = play to end
+    sfx_volume: float | None = None    # 0.0–2.0; None = use script-level sfx_volume
     image: str | None = None   # relative path from library root; skips matching when set
     image2: str | None = None  # shown at the halfway point of the sentence
     voice_id: str | None = None  # overrides top-level voice_id when set
@@ -41,6 +42,7 @@ class VideoScript:
     caption_y_pct: float = 80.0           # vertical position as % of frame height (0 = top, 100 = bottom)
     pitch_shift: float = 0.0              # semitones applied to all sentences (0 = off)
     speed: float = 1.0                    # playback speed multiplier applied to all sentences
+    sfx_volume: float = 1.0              # default SFX volume multiplier (0.0–2.0)
 
 
 def _next_sentence_id(raw_sentences: list[dict]) -> str:
@@ -77,6 +79,7 @@ def parse(path: Path) -> VideoScript:
             sound_effect=s.get("sound_effect"),
             sfx_offset=float(s.get("sfx_offset", 0.0)),
             sfx_duration=float(s["sfx_duration"]) if s.get("sfx_duration") is not None else None,
+            sfx_volume=float(s["sfx_volume"]) if s.get("sfx_volume") is not None else None,
             image=s.get("image"),
             image2=s.get("image2"),
             voice_id=s.get("voice_id") or None,
@@ -110,4 +113,5 @@ def parse(path: Path) -> VideoScript:
         caption_y_pct=float(data.get("caption_y_pct", 80.0)),
         pitch_shift=float(data.get("pitch_shift", 0.0)),
         speed=float(data.get("speed", 1.0)),
+        sfx_volume=float(data.get("sfx_volume", 1.0)),
     )

@@ -120,7 +120,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
 
     audio_map = {}
     image_map: dict[str, list[Path | None]] = {}
-    sfx_map: dict[str, tuple[Path, float, float | None] | None] = {}
+    sfx_map: dict[str, tuple[Path, float, float | None, float] | None] = {}
     sentence_overlay_map: dict[str, tuple[Path, float, float] | None] = {}
 
     mood_provider = _resolve_mood_provider()
@@ -176,8 +176,9 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
         if sentence.sound_effect:
             sfx_path = config.sfx_path / sentence.sound_effect
             if sfx_path.exists():
-                sfx_map[sentence.id] = (sfx_path, sentence.sfx_offset, sentence.sfx_duration)
-                sfx_label = f"{sentence.sound_effect} @{sentence.sfx_offset}s"
+                eff_sfx_vol = sentence.sfx_volume if sentence.sfx_volume is not None else script.sfx_volume
+                sfx_map[sentence.id] = (sfx_path, sentence.sfx_offset, sentence.sfx_duration, eff_sfx_vol)
+                sfx_label = f"{sentence.sound_effect} @{sentence.sfx_offset}s vol={eff_sfx_vol}"
                 if sentence.sfx_duration:
                     sfx_label += f" [{sentence.sfx_duration}s]"
             else:

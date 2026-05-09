@@ -3,6 +3,10 @@ import os
 import sys
 from pathlib import Path
 
+import PIL.Image
+if not hasattr(PIL.Image, "ANTIALIAS"):
+    PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="vibrava")
