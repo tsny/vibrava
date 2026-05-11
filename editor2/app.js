@@ -115,6 +115,7 @@ const S = {
   saveStatus: '',
   density: localStorage.getItem('vibrava_density') || 'spacious',
   geminiTokens: null, // { input_tokens, output_tokens, calls }
+  elUsage: null,     // { characters, calls }
 };
 
 const videoCache = new Map();
@@ -264,7 +265,10 @@ function renderSidebar() {
   document.getElementById('sidebar').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <h2 style="font-size:1em;font-weight:700;color:#ccc">Vibrava Editor</h2>
-      <button id="settings-btn" class="btn sec" style="padding:3px 8px;font-size:0.85em" title="Settings">⚙️</button>
+      <div style="display:flex;gap:4px">
+        <button id="tts-cache-btn" class="btn sec" style="padding:3px 8px;font-size:0.85em" title="TTS Cache">🔊</button>
+        <button id="settings-btn" class="btn sec" style="padding:3px 8px;font-size:0.85em" title="Settings">⚙️</button>
+      </div>
     </div>
 
     <label class="lbl">Script</label>
@@ -289,6 +293,9 @@ function renderSidebar() {
       </select>
       ${S.geminiTokens ? `<div id="gemini-token-badge" style="margin-top:5px;padding:4px 8px;background:#1e2a1e;border:1px solid #3a5a3a;border-radius:4px;font-size:0.78em;color:#8bc88b">
         Gemini tokens: ${(S.geminiTokens.input_tokens + S.geminiTokens.output_tokens).toLocaleString()} total · ${S.geminiTokens.calls} call${S.geminiTokens.calls === 1 ? '' : 's'}
+      </div>` : ''}
+      ${S.elUsage ? `<div id="el-usage-badge" style="margin-top:5px;padding:4px 8px;background:#1e1e2a;border:1px solid #3a3a5a;border-radius:4px;font-size:0.78em;color:#8b9bc8">
+        ElevenLabs: ${S.elUsage.characters.toLocaleString()} chars · ${S.elUsage.calls} call${S.elUsage.calls === 1 ? '' : 's'}
       </div>` : ''}
 
       <label class="lbl">Voice</label>
@@ -358,6 +365,141 @@ function renderSidebar() {
   bindSidebar();
 }
 
+// ─── TTS Cache modal ─────────────────────────────────────────────────────────
+
+let ttsCacheAudio = new Audio();
+let ttsCacheEntries = [];
+let ttsCacheSearch = '';
+let ttsCachePlaying = null; // file name currently playing
+
+function ttsCacheUrl(file) {
+  return `/cache/tts/${encodeURIComponent(file)}`;
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function fmtDur(s) {
+  if (s == null) return '—';
+  const m = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(1);
+  return m > 0 ? `${m}:${sec.padStart(4, '0')}` : `${sec}s`;
+}
+
+function renderTtsCacheList() {
+  const container = document.getElementById('tts-cache-list');
+  if (!container) return;
+  const search = ttsCacheSearch.toLowerCase();
+  const filtered = search
+    ? ttsCacheEntries.filter(e => e.text.toLowerCase().includes(search) || e.file.includes(search))
+    : ttsCacheEntries;
+
+  if (!filtered.length) {
+    container.innerHTML = `<p class="muted" style="padding:20px;text-align:center">${ttsCacheEntries.length ? 'No matches.' : 'Cache is empty.'}</p>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(e => {
+    const isPlaying = ttsCachePlaying === e.file;
+    const providerColor = e.provider === 'elevenlabs' ? '#8b9bc8' : '#8bc88b';
+    return `
+      <div class="tts-cache-row${isPlaying ? ' tts-cache-playing' : ''}" data-file="${esc(e.file)}">
+        <button class="btn ${isPlaying ? 'pri' : 'sec'} tts-cache-play" data-file="${esc(e.file)}"
+          style="padding:5px 10px;flex-shrink:0;width:38px">${isPlaying ? '⏹' : '▶'}</button>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.88em;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${e.text ? esc(e.text) : `<span class="muted">${esc(e.file)}</span>`}
+          </div>
+          <div style="font-size:0.75em;color:var(--muted);margin-top:2px;display:flex;gap:10px">
+            <span style="color:${providerColor}">${esc(e.provider)}</span>
+            <span>${fmtDur(e.duration)}</span>
+            <span>${fmtSize(e.size)}</span>
+            <span class="muted" style="font-family:monospace;font-size:0.9em">${esc(e.file.slice(0, 8))}…</span>
+          </div>
+        </div>
+        <button class="btn sec tts-cache-del" data-file="${esc(e.file)}"
+          style="padding:4px 7px;flex-shrink:0;font-size:0.8em" title="Delete">✕</button>
+      </div>`;
+  }).join('');
+}
+
+async function openTtsCache() {
+  let modal = document.getElementById('tts-cache-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'tts-cache-modal';
+    modal.addEventListener('click', e => { if (e.target === modal) closeTtsCache(); });
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="tts-cache-box">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <strong>TTS Cache</strong>
+        <button id="tts-cache-close" class="btn sec" style="padding:2px 8px">✕</button>
+      </div>
+      <input id="tts-cache-search" class="inp" type="text" placeholder="Search text or filename…"
+        style="width:100%;margin-bottom:10px" value="${esc(ttsCacheSearch)}">
+      <div id="tts-cache-list" style="overflow-y:auto;max-height:calc(80vh - 100px)">
+        <p class="muted" style="padding:20px;text-align:center">Loading…</p>
+      </div>
+    </div>
+  `;
+  modal.classList.add('open');
+  document.getElementById('tts-cache-close').addEventListener('click', closeTtsCache);
+  document.getElementById('tts-cache-search').addEventListener('input', e => {
+    ttsCacheSearch = e.target.value;
+    renderTtsCacheList();
+  });
+  modal.addEventListener('click', e => {
+    const playBtn = e.target.closest('.tts-cache-play');
+    if (playBtn) {
+      const file = playBtn.dataset.file;
+      if (ttsCachePlaying === file) {
+        ttsCacheAudio.pause();
+        ttsCacheAudio.src = '';
+        ttsCachePlaying = null;
+      } else {
+        ttsCacheAudio.pause();
+        ttsCacheAudio.src = ttsCacheUrl(file);
+        ttsCachePlaying = file;
+        ttsCacheAudio.play().catch(() => {});
+        ttsCacheAudio.onended = () => { ttsCachePlaying = null; renderTtsCacheList(); };
+      }
+      renderTtsCacheList();
+      return;
+    }
+    const delBtn = e.target.closest('.tts-cache-del');
+    if (delBtn) {
+      const file = delBtn.dataset.file;
+      if (!confirm(`Delete ${file}?`)) return;
+      fetch(`/api/tts-cache/${encodeURIComponent(file)}`, { method: 'DELETE' })
+        .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+        .then(() => {
+          if (ttsCachePlaying === file) { ttsCacheAudio.pause(); ttsCachePlaying = null; }
+          ttsCacheEntries = ttsCacheEntries.filter(e => e.file !== file);
+          renderTtsCacheList();
+        })
+        .catch(err => alert('Delete failed: ' + err.message));
+    }
+  });
+
+  try {
+    ttsCacheEntries = await get('/api/tts-cache');
+  } catch (e) {
+    ttsCacheEntries = [];
+  }
+  renderTtsCacheList();
+}
+
+function closeTtsCache() {
+  ttsCacheAudio.pause();
+  ttsCachePlaying = null;
+  document.getElementById('tts-cache-modal')?.classList.remove('open');
+}
+
 // ─── Settings modal ──────────────────────────────────────────────────────────
 
 function applyDensity() {
@@ -405,6 +547,7 @@ function closeSettings() {
 }
 
 function bindSidebar() {
+  document.getElementById('tts-cache-btn')?.addEventListener('click', openTtsCache);
   document.getElementById('settings-btn')?.addEventListener('click', openSettings);
 
   document.getElementById('ss-select')?.addEventListener('change', async e => {
@@ -555,84 +698,88 @@ function sentenceRowHtml(s, i) {
 
   return `
     <div class="srow${isSel ? ' srow-sel' : ''}" data-si="${i}">
-      <div class="srow-num">${i + 1}</div>
-      <div class="srow-fields">
-        <textarea class="inp stxt" data-si="${i}" rows="3">${esc(s.text || '')}</textarea>
-        <div class="srow-controls">
-          <div class="field-group field-group-wide">
-            <span class="field-lbl">Sound Effect</span>
-            <div style="display:flex;gap:4px">
-              <select class="inp ssfx" data-si="${i}" style="flex:1;min-width:80px">
-                ${sfxOpts.map(f => `<option value="${esc(f)}"${curSfx === f ? ' selected' : ''}>${esc(f)}</option>`).join('')}
+      <div class="srow-top">
+        <div class="srow-num">${i + 1}</div>
+        <div class="srow-fields">
+          <textarea class="inp stxt" data-si="${i}" rows="3">${esc(s.text || '')}</textarea>
+          <div class="srow-controls">
+            <div class="field-group field-group-wide">
+              <span class="field-lbl">Sound Effect</span>
+              <div style="display:flex;gap:4px">
+                <select class="inp ssfx" data-si="${i}" style="flex:1;min-width:80px">
+                  ${sfxOpts.map(f => `<option value="${esc(f)}"${curSfx === f ? ' selected' : ''}>${esc(f)}</option>`).join('')}
+                </select>
+                ${s.sound_effect ? `<button class="btn sec ssfxplay" data-si="${i}" title="Play sound effect" style="padding:5px 8px;flex-shrink:0">▶</button>` : ''}
+              </div>
+            </div>
+            ${s.sound_effect ? `
+              <div class="field-group field-group-sm">
+                <span class="field-lbl">SFX Offset (s)</span>
+                <input class="inp ssfxofs" type="number" data-si="${i}"
+                  value="${s.sfx_offset ?? 0}" min="0" step="0.1">
+              </div>
+              <div class="field-group field-group-sm">
+                <span class="field-lbl">SFX Dur (s)</span>
+                <input class="inp ssfxdur" type="number" data-si="${i}"
+                  value="${s.sfx_duration ?? ''}" min="0" step="0.1" placeholder="full">
+              </div>
+              <div class="field-group field-group-sm">
+                <span class="field-lbl">SFX Vol</span>
+                <input class="inp ssfxvol" type="number" data-si="${i}"
+                  value="${s.sfx_volume ?? ''}" min="0" max="2" step="0.05" placeholder="—">
+              </div>
+            ` : ''}
+            <div class="field-group field-group-wide">
+              <span class="field-lbl">Voice</span>
+              <select class="inp svoice" data-si="${i}" style="min-width:120px">
+                <option value="">— voice default —</option>
+                ${_voicesForProvider(S.scriptData?.tts_provider)
+                  .map(([id, name]) => `<option value="${esc(id)}"${s.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
               </select>
-              ${s.sound_effect ? `<button class="btn sec ssfxplay" data-si="${i}" title="Play sound effect" style="padding:5px 8px;flex-shrink:0">▶</button>` : ''}
+            </div>
+            <div class="field-group field-group-sm">
+              <span class="field-lbl">Pause (s)</span>
+              <input class="inp spause" type="number" data-si="${i}"
+                value="${s.pause_duration ?? ''}" min="0" step="0.1" placeholder="—">
+            </div>
+            <div class="field-group field-group-sm">
+              <span class="field-lbl">Pitch (st)</span>
+              <input class="inp spitch" type="number" data-si="${i}"
+                value="${s.pitch_shift ?? ''}" step="0.5" placeholder="—">
+            </div>
+            <div class="field-group field-group-sm">
+              <span class="field-lbl">Speed ×</span>
+              <input class="inp sspeed" type="number" data-si="${i}"
+                value="${s.speed ?? ''}" min="0.5" max="2.0" step="0.05" placeholder="—">
+            </div>
+            <div class="field-group" style="justify-content:flex-end">
+              <span class="sdur muted" style="font-size:0.78em;white-space:nowrap;padding-bottom:6px">${dur !== null ? `~${dur}s` : ''}</span>
             </div>
           </div>
-          ${s.sound_effect ? `
+          ${s.overlay_image ? `
+          <div class="srow-controls" style="margin-top:4px">
             <div class="field-group field-group-sm">
-              <span class="field-lbl">SFX Offset (s)</span>
-              <input class="inp ssfxofs" type="number" data-si="${i}"
-                value="${s.sfx_offset ?? 0}" min="0" step="0.1">
+              <span class="field-lbl">Overlay Opacity</span>
+              <input class="inp sovopa" type="number" data-si="${i}"
+                value="${s.overlay_opacity ?? 1}" min="0" max="1" step="0.05">
             </div>
             <div class="field-group field-group-sm">
-              <span class="field-lbl">SFX Dur (s)</span>
-              <input class="inp ssfxdur" type="number" data-si="${i}"
-                value="${s.sfx_duration ?? ''}" min="0" step="0.1" placeholder="full">
+              <span class="field-lbl">Overlay Size (%)</span>
+              <input class="inp sovsize" type="number" data-si="${i}"
+                value="${Math.round((s.overlay_size ?? 1/3) * 100)}" min="1" max="100" step="1">
             </div>
-            <div class="field-group field-group-sm">
-              <span class="field-lbl">SFX Vol</span>
-              <input class="inp ssfxvol" type="number" data-si="${i}"
-                value="${s.sfx_volume ?? ''}" min="0" max="2" step="0.05" placeholder="—">
-            </div>
+          </div>
           ` : ''}
-          <div class="field-group field-group-wide">
-            <span class="field-lbl">Voice</span>
-            <select class="inp svoice" data-si="${i}" style="min-width:120px">
-              <option value="">— voice default —</option>
-              ${_voicesForProvider(S.scriptData?.tts_provider)
-                .map(([id, name]) => `<option value="${esc(id)}"${s.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field-group field-group-sm">
-            <span class="field-lbl">Pause (s)</span>
-            <input class="inp spause" type="number" data-si="${i}"
-              value="${s.pause_duration ?? ''}" min="0" step="0.1" placeholder="—">
-          </div>
-          <div class="field-group field-group-sm">
-            <span class="field-lbl">Pitch (st)</span>
-            <input class="inp spitch" type="number" data-si="${i}"
-              value="${s.pitch_shift ?? ''}" step="0.5" placeholder="—">
-          </div>
-          <div class="field-group field-group-sm">
-            <span class="field-lbl">Speed ×</span>
-            <input class="inp sspeed" type="number" data-si="${i}"
-              value="${s.speed ?? ''}" min="0.5" max="2.0" step="0.05" placeholder="—">
-          </div>
-          <div class="field-group" style="justify-content:flex-end">
-            <span class="sdur muted" style="font-size:0.78em;white-space:nowrap;padding-bottom:6px">${dur !== null ? `~${dur}s` : ''}</span>
-          </div>
         </div>
-        ${s.overlay_image ? `
-        <div class="srow-controls" style="margin-top:4px">
-          <div class="field-group field-group-sm">
-            <span class="field-lbl">Overlay Opacity</span>
-            <input class="inp sovopa" type="number" data-si="${i}"
-              value="${s.overlay_opacity ?? 1}" min="0" max="1" step="0.05">
-          </div>
-          <div class="field-group field-group-sm">
-            <span class="field-lbl">Overlay Size (%)</span>
-            <input class="inp sovsize" type="number" data-si="${i}"
-              value="${Math.round((s.overlay_size ?? 1/3) * 100)}" min="1" max="100" step="1">
-          </div>
+        ${thumbColHtml(s.overlay_image, 'overlay_image', i, isSel)}
+        <div style="display:flex;flex-direction:column;gap:4px;align-self:flex-start;margin-top:4px">
+          <button class="btn sec sttsplay" data-si="${i}" title="Preview TTS" style="padding:4px 8px">🔊</button>
+          <button class="btn sec sdup" data-si="${i}" title="Duplicate" style="padding:4px 8px">⧉</button>
+          <button class="btn sec sdel" data-si="${i}" title="Remove" style="padding:4px 8px">✕</button>
         </div>
-        ` : ''}
       </div>
-      ${imageThumbsHtml(s, i, isSel)}
-      ${thumbColHtml(s.overlay_image, 'overlay_image', i, isSel)}
-      <div style="display:flex;flex-direction:column;gap:4px;align-self:flex-start;margin-top:4px">
-        <button class="btn sec sttsplay" data-si="${i}" title="Preview TTS" style="padding:4px 8px">🔊</button>
-        <button class="btn sec sdup" data-si="${i}" title="Duplicate" style="padding:4px 8px">⧉</button>
-        <button class="btn sec sdel" data-si="${i}" title="Remove" style="padding:4px 8px">✕</button>
+      <div class="srow-images">
+        ${imageThumbsHtml(s, i, isSel)}
       </div>
     </div>
   `;
@@ -719,7 +866,9 @@ function handleSentenceClick(e) {
         }, offset);
       }
     }).then(() => {
-      if (S.scriptData?.tts_provider === 'gemini') refreshGeminiTokens();
+      const provider = S.scriptData?.tts_provider || 'elevenlabs';
+      if (provider === 'gemini') refreshGeminiTokens();
+      else if (provider === 'elevenlabs') refreshElUsage();
     }).catch(err => {
       alert('TTS failed: ' + err.message);
     }).finally(() => {
@@ -1209,6 +1358,20 @@ async function refreshGeminiTokens() {
   } catch { /* ignore if endpoint unavailable */ }
 }
 
+async function refreshElUsage() {
+  try {
+    S.elUsage = await get('/api/el-usage');
+    const badge = document.getElementById('el-usage-badge');
+    if (badge && S.elUsage) {
+      const chars = S.elUsage.characters.toLocaleString();
+      const calls = S.elUsage.calls;
+      badge.textContent = `ElevenLabs: ${chars} chars · ${calls} call${calls === 1 ? '' : 's'}`;
+    } else if (!badge && S.elUsage && S.elUsage.calls > 0) {
+      renderSidebar();
+    }
+  } catch { /* ignore if endpoint unavailable */ }
+}
+
 async function init() {
   const [cfg, scripts, clips, sfxFiles] = await Promise.all([
     get('/api/config'),
@@ -1221,7 +1384,7 @@ async function init() {
   S.scripts = scripts;
   S.clips = clips;
   S.sfxFiles = sfxFiles;
-  await refreshGeminiTokens();
+  await Promise.all([refreshGeminiTokens(), refreshElUsage()]);
   applyDensity();
 
   if (S.scripts.length) {

@@ -90,8 +90,8 @@ select.inp { cursor: pointer; }
 /* ── Sentence rows ──────────────────────────────────── */
 .srow {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -99,6 +99,20 @@ select.inp { cursor: pointer; }
   margin-bottom: 10px;
 }
 .srow-sel { background: var(--sel-bg); border-color: var(--sel-border); }
+
+.srow-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.srow-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
 
 .srow-num {
   color: var(--muted);
@@ -234,8 +248,41 @@ img.cur-img { width: 96px; height: 96px; object-fit: cover; border-radius: 4px; 
   min-width: 280px;
 }
 
+/* ── TTS Cache modal ────────────────────────────────── */
+#tts-cache-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+#tts-cache-modal.open { display: flex; }
+.tts-cache-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  width: min(720px, 92vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+.tts-cache-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.tts-cache-row:last-child { border-bottom: none; }
+.tts-cache-playing { background: var(--sel-bg); border-radius: 4px; }
+
 /* ── Compact density ────────────────────────────────── */
-#app.compact .srow { padding: 4px 6px; gap: 5px; margin-bottom: 3px; }
+#app.compact .srow { padding: 4px 6px; gap: 3px; margin-bottom: 3px; }
+#app.compact .srow-top { gap: 5px; }
+#app.compact .srow-images { gap: 4px; padding-top: 4px; }
 #app.compact .srow-controls { margin-top: 3px; gap: 4px; }
 #app.compact .srow .thumb { width: 48px !important; height: 48px !important; }
 #app.compact .srow .spick { width: 48px !important; }

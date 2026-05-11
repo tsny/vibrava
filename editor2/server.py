@@ -96,9 +96,22 @@ def _record_gemini_tokens(input_tokens: int, output_tokens: int) -> None:
         data["output_tokens"] = data.get("output_tokens", 0) + output_tokens
         data["calls"] = data.get("calls", 0) + 1
         _GEMINI_TOKEN_FILE.write_text(json.dumps(data))
+
+
+def _record_el_usage(characters: int) -> None:
+    with _token_lock:
+        try:
+            data = json.loads(_EL_USAGE_FILE.read_text()) if _EL_USAGE_FILE.exists() else {}
+        except Exception:
+            data = {}
+        data["characters"] = data.get("characters", 0) + characters
+        data["calls"] = data.get("calls", 0) + 1
+        _EL_USAGE_FILE.write_text(json.dumps(data))
+
 SFX_PATH = Path(CONFIG.get("sfx", {}).get("path", "sfx")).resolve()
 CACHE_PATH = Path(CONFIG.get("cache", {}).get("path", "cache")).resolve()
 _GEMINI_TOKEN_FILE = CACHE_PATH / "gemini_tokens.json"
+_EL_USAGE_FILE = CACHE_PATH / "el_usage.json"
 
 _EL_CFG = CONFIG.get("elevenlabs", {})
 EL_API_KEY = os.environ.get("ELEVENLABS_API_KEY") or _EL_CFG.get("api_key", "")
@@ -303,10 +316,45 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(json.load(f))
             else:
                 self._json({"input_tokens": 0, "output_tokens": 0, "calls": 0})
+        elif path == "/api/el-usage":
+            if _EL_USAGE_FILE.exists():
+                with open(_EL_USAGE_FILE) as f:
+                    self._json(json.load(f))
+            else:
+                self._json({"characters": 0, "calls": 0})
+        elif path == "/api/tts-cache":
+            tts_dir = CACHE_PATH / "tts"
+            entries = []
+            if tts_dir.exists():
+                audio_exts = {".mp3", ".wav"}
+                for f in sorted(tts_dir.iterdir(), key=lambda p: -p.stat().st_mtime):
+                    if f.suffix.lower() not in audio_exts:
+                        continue
+                    sidecar = f.with_suffix(".json")
+                    meta = {}
+                    if sidecar.exists():
+                        try:
+                            meta = json.loads(sidecar.read_text())
+                        except Exception:
+                            pass
+                    words = meta.get("words", [])
+                    text = " ".join(w["word"] for w in words if w.get("word")) if words else ""
+                    provider = "elevenlabs" if f.suffix.lower() == ".mp3" else "gemini"
+                    entries.append({
+                        "file": f.name,
+                        "size": f.stat().st_size,
+                        "duration": meta.get("duration"),
+                        "text": text,
+                        "provider": provider,
+                        "mtime": f.stat().st_mtime,
+                    })
+            self._json(entries)
         elif path.startswith("/lib/"):
             self._static(LIBRARY_PATH, unquote(path[5:]))
         elif path.startswith("/sfx/"):
             self._static(SFX_PATH, unquote(path[5:]))
+        elif path.startswith("/cache/tts/"):
+            self._static(CACHE_PATH / "tts", unquote(path[11:]))
         else:
             self._err(404, "not found")
 
@@ -419,6 +467,7 @@ class Handler(BaseHTTPRequestHandler):
                         audio_bytes = base64.b64decode(response.audio_base_64)
                         cache_dir.mkdir(parents=True, exist_ok=True)
                         audio_path.write_bytes(audio_bytes)
+                        _record_el_usage(len(text))
                     except Exception as e:
                         msg = _http_err_msg(e)
                         log.error("TTS  elevenlabs failed: %s", msg)
@@ -470,6 +519,36 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"name": name})
         else:
             self._err(404, "not found")
+
+    def do_DELETE(self):
+        log.info("DELETE %s", self.path)
+        try:
+            parsed = urlparse(self.path)
+            path = parsed.path
+            if path.startswith("/api/tts-cache/"):
+                filename = unquote(path[len("/api/tts-cache/"):])
+                if "/" in filename or "\\" in filename or not filename:
+                    return self._err(400, "invalid filename")
+                tts_dir = CACHE_PATH / "tts"
+                audio_exts = {".mp3", ".wav"}
+                target = (tts_dir / filename).resolve()
+                if not str(target).startswith(str(tts_dir)):
+                    return self._err(403, "forbidden")
+                if target.suffix.lower() not in audio_exts:
+                    return self._err(400, "not an audio file")
+                if not target.exists():
+                    return self._err(404, "not found")
+                target.unlink()
+                sidecar = target.with_suffix(".json")
+                if sidecar.exists():
+                    sidecar.unlink()
+                log.info("TTS  cache deleted: %s", filename)
+                self._json({"ok": True})
+            else:
+                self._err(404, "not found")
+        except Exception:
+            log.error("Unhandled exception in DELETE %s\n%s", self.path, traceback.format_exc())
+            self._err(500, "internal server error")
 
     def _static(self, base: Path, rel: str):
         target = (base / rel).resolve()
