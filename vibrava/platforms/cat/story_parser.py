@@ -27,7 +27,7 @@ class VideoScript:
     voice_id: str | None
     output_filename: str
     sentences: list[Sentence]
-    caption_style: str = "chunk"          # "chunk" | "word" | "line" | "none"
+    caption_style: str = "chunk"          # "chunk" | "flash" | "word" | "line" | "none"
     resolution: tuple[int, int] = field(default_factory=lambda: (1080, 1920))
     pause_duration: float | None = None  # overrides config if set
     music: str | None = None             # filename in res/music/, e.g. "lofi.mp3"
@@ -43,6 +43,7 @@ class VideoScript:
     pitch_shift: float = 0.0              # semitones applied to all sentences (0 = off)
     speed: float = 1.0                    # playback speed multiplier applied to all sentences
     sfx_volume: float = 1.0              # default SFX volume multiplier (0.0–2.0)
+    caption_offset: float = 0.0          # seconds to shift timed captions (negative = show earlier)
 
 
 def _next_sentence_id(raw_sentences: list[dict]) -> str:
@@ -114,4 +115,5 @@ def parse(path: Path) -> VideoScript:
         pitch_shift=float(data.get("pitch_shift", 0.0)),
         speed=float(data.get("speed", 1.0)),
         sfx_volume=float(data.get("sfx_volume", 1.0)),
+        caption_offset=float(data.get("caption_offset", 0.0)),
     )

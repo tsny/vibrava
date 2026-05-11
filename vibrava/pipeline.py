@@ -102,6 +102,30 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     index = ClipIndex.load(config.library_path / "clip_index.json")
     cache_dir = config.cache_path / "tts"
 
+    w, h = script.resolution
+    pause_str = f"{script.pause_duration}s" if script.pause_duration is not None else f"{0.3}s (config)"
+    print(f"[script] {script_path.name}  →  {script.output_filename}")
+    print(f"         sentences={len(script.sentences)}  resolution={w}×{h}  caption={script.caption_style}  pause={pause_str}")
+    voice_label = script.voice_id or "default"
+    print(f"         tts={script.tts_provider}  voice={voice_label}")
+    if script.music:
+        music_info = f"music={script.music}  vol={script.music_volume}"
+        if script.music_start:
+            music_info += f"  start={script.music_start}s"
+        print(f"         {music_info}")
+    if script.pitch_shift != 0.0 or script.speed != 1.0:
+        print(f"         pitch_shift={script.pitch_shift:+.1f}st  speed={script.speed}x")
+    if script.sfx_volume != 1.0:
+        print(f"         sfx_volume={script.sfx_volume}")
+    if script.pause_jitter > 0:
+        print(f"         pause_jitter={script.pause_jitter}s")
+    if script.random_fallback:
+        print(f"         random_fallback=True")
+    if script.overlay_image:
+        print(f"         overlay={script.overlay_image}  size={script.overlay_image_size:.2f}")
+    if script.caption_font_size is not None or script.caption_y_pct != 80.0:
+        print(f"         caption_font={script.caption_font_size or 'auto'}  caption_y={script.caption_y_pct}%")
+
     use_tiktok = script.tts_provider == "tiktok"
     provider_name = "tiktok" if use_tiktok else "elevenlabs"
     print(f"[tts]   provider={provider_name}")
@@ -260,6 +284,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
         pause_jitter=script.pause_jitter,
         caption_font_size=script.caption_font_size,
         caption_y_pct=script.caption_y_pct,
+        caption_offset=script.caption_offset,
     )
     print(f"[done] {output_path}")
     if config.on_complete:

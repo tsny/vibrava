@@ -185,6 +185,15 @@ def _build_caption_layout(
     return font, positions
 
 
+def _estimate_word_timestamps(text: str, duration: float) -> list[WordTimestamp]:
+    """Evenly distribute words across duration when real timestamps aren't available."""
+    words = text.strip().split()
+    if not words:
+        return []
+    dt = duration / len(words)
+    return [WordTimestamp(w, i * dt, (i + 1) * dt) for i, w in enumerate(words)]
+
+
 def _chunk_words(
     words: list[WordTimestamp],
     chunk_size: int = 5,
@@ -338,6 +347,7 @@ def build(
     fps: int = 30,
     caption_font_size: int | None = None,
     caption_y_pct: float = 80.0,
+    caption_offset: float = 0.0,
 ) -> None:
     width, height = resolution
     clips = []
@@ -400,37 +410,51 @@ def build(
 
         elif caption_style == "word":
             if not seg.words:
-                # No word timestamps (e.g. TikTok TTS or empty sentence) — fall back to line captions
                 if sentence.text.strip():
+                    print(f"  [warn] {sentence.id}: no word timestamps — falling back to line caption")
                     caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
                     layers.append(ImageClip(caption_frame, ismask=False).set_duration(audio_duration))
             else:
                 font, positions = _build_caption_layout(seg.words, width, height, caption_font_size, caption_y_pct)
                 for i, word in enumerate(seg.words):
                     end = seg.words[i + 1].start if i + 1 < len(seg.words) else audio_duration
+                    t = max(word.start + caption_offset, 0.0)
                     layers.append(
                         ImageClip(_render_caption_word(seg.words, i, width, height, font, positions), ismask=False)
-                        .set_start(word.start)
+                        .set_start(t)
                         .set_duration(max(end - word.start, 0.05))
                     )
 
         elif caption_style == "chunk":
-            if not seg.words:
-                if sentence.text.strip():
-                    caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
-                    layers.append(ImageClip(caption_frame, ismask=False).set_duration(audio_duration))
-            else:
-                chunks = _chunk_words(seg.words)
+            if not seg.words and sentence.text.strip():
+                print(f"  [warn] {sentence.id}: no word timestamps — using estimated timing for chunk captions")
+            words = seg.words or _estimate_word_timestamps(sentence.text, audio_duration)
+            if words:
+                chunks = _chunk_words(words)
                 for ci, chunk in enumerate(chunks):
                     chunk_text = " ".join(w.word for w in chunk)
-                    start = chunk[0].start
+                    start = max(chunk[0].start + caption_offset, 0.0)
                     end = chunks[ci + 1][0].start if ci + 1 < len(chunks) else audio_duration
                     frame = _render_caption_line(chunk_text, width, height, caption_font_size, caption_y_pct)
                     layers.append(
                         ImageClip(frame, ismask=False)
                         .set_start(start)
-                        .set_duration(max(end - start, 0.05))
+                        .set_duration(max(end - chunk[0].start, 0.05))
                     )
+
+        elif caption_style == "flash":
+            if not seg.words and sentence.text.strip():
+                print(f"  [warn] {sentence.id}: no word timestamps — using estimated timing for flash captions")
+            words = seg.words or _estimate_word_timestamps(sentence.text, audio_duration)
+            for i, word in enumerate(words):
+                end = words[i + 1].start if i + 1 < len(words) else audio_duration
+                t = max(word.start + caption_offset, 0.0)
+                frame = _render_caption_line(word.word, width, height, caption_font_size, caption_y_pct)
+                layers.append(
+                    ImageClip(frame, ismask=False)
+                    .set_start(t)
+                    .set_duration(max(end - word.start, 0.05))
+                )
 
         # Per-sentence overlay — centered, alpha ramps to target by the midpoint
         ov_entry = (sentence_overlay_map or {}).get(sentence.id)

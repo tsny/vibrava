@@ -5,7 +5,6 @@
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const GIF_EXTS   = new Set(['.gif']);
 const VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm']);
-const ALL_IMG    = new Set([...IMAGE_EXTS, ...GIF_EXTS]);
 
 const TYPE_FILTER_EXTS = { 'jpg/png': IMAGE_EXTS, 'gif': GIF_EXTS, 'mp4': VIDEO_EXTS };
 const PAGE_SIZE = 50;
@@ -255,7 +254,7 @@ function renderSidebar() {
 
       <label class="lbl">Caption style</label>
       <select id="ss-caption" class="inp" style="width:100%">
-        ${['chunk', 'word', 'line', 'none'].map(v => `<option value="${v}"${(d.caption_style || 'chunk') === v ? ' selected' : ''}>${v}</option>`).join('')}
+        ${['chunk', 'flash', 'word', 'line', 'none'].map(v => `<option value="${v}"${(d.caption_style || 'chunk') === v ? ' selected' : ''}>${v}</option>`).join('')}
       </select>
 
       <label class="lbl">Caption font size (px, blank = auto)</label>
@@ -268,6 +267,10 @@ function renderSidebar() {
           value="${d.caption_y_pct ?? 80}">
         <span id="ss-capy-val" style="color:#ccc;font-size:0.85em;min-width:32px;text-align:right">${d.caption_y_pct ?? 80}%</span>
       </div>
+
+      <label class="lbl">Caption timing offset (s, negative = show earlier)</label>
+      <input id="ss-capoffset" class="inp" type="number" step="0.05" style="width:100%"
+        value="${d.caption_offset ?? 0}">
 
       <label class="lbl">Output filename</label>
       <input id="ss-outfile" class="inp" style="width:100%" value="${esc(d.output_filename || 'output.mp4')}">
@@ -402,6 +405,11 @@ function bindSidebar() {
     S.scriptData.caption_y_pct = v;
     const span = document.getElementById('ss-capy-val');
     if (span) span.textContent = v + '%';
+  });
+
+  document.getElementById('ss-capoffset')?.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    S.scriptData.caption_offset = isNaN(v) ? 0 : v;
   });
 
   document.getElementById('ss-outfile')?.addEventListener('input', e => {
