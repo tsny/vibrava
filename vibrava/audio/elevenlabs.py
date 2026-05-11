@@ -46,6 +46,7 @@ def generate(
     meta_path = cache_dir / f"{cache_key}.json"
 
     if audio_path.exists() and meta_path.exists():
+        print(f"[tts cache hit] {text[:60]!r}")
         with open(meta_path) as f:
             meta = json.load(f)
         return AudioSegment(
