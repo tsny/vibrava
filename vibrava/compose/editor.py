@@ -1,5 +1,6 @@
 import multiprocessing
 import random
+import re
 import subprocess
 from pathlib import Path
 
@@ -20,6 +21,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 from vibrava.audio.tts import AudioSegment, WordTimestamp
 from vibrava.platforms.cat.story_parser import Sentence
+
+def _caption_text(text: str) -> str:
+    return re.sub(r"\[.*?\]", "", text).strip()
+
 
 # ---------------------------------------------------------------------------
 # Font loading (cached by size)
@@ -404,15 +409,17 @@ def build(
         # Avoids wrapping CompositeVideoClip inside another CompositeVideoClip.
         layers = [video_clip]
 
-        if caption_style == "line" and sentence.text.strip():
-            caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
+        cap_text = _caption_text(sentence.text)
+
+        if caption_style == "line" and cap_text:
+            caption_frame = _render_caption_line(cap_text, width, height, caption_font_size, caption_y_pct)
             layers.append(ImageClip(caption_frame, ismask=False).set_duration(audio_duration))
 
         elif caption_style == "word":
             if not seg.words:
-                if sentence.text.strip():
+                if cap_text:
                     print(f"  [warn] {sentence.id}: no word timestamps — falling back to line caption")
-                    caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
+                    caption_frame = _render_caption_line(cap_text, width, height, caption_font_size, caption_y_pct)
                     layers.append(ImageClip(caption_frame, ismask=False).set_duration(audio_duration))
             else:
                 font, positions = _build_caption_layout(seg.words, width, height, caption_font_size, caption_y_pct)
@@ -426,14 +433,14 @@ def build(
                     )
 
         elif caption_style in ("chunk", "flash"):
-            if not seg.words and sentence.text.strip():
+            if not seg.words and cap_text:
                 print(f"  [warn] {sentence.id}: no word timestamps — using estimated timing for {caption_style} captions")
-            words = seg.words or _estimate_word_timestamps(sentence.text, audio_duration)
+            words = seg.words or _estimate_word_timestamps(cap_text, audio_duration)
             if words:
                 chunk_size = 1 if caption_style == "flash" else 5
                 chunks = _chunk_words(words, chunk_size)
                 for ci, chunk in enumerate(chunks):
-                    chunk_text = " ".join(w.word for w in chunk)
+                    chunk_text = _caption_text(" ".join(w.word for w in chunk))
                     start = max(chunk[0].start + caption_offset, 0.0)
                     end = chunks[ci + 1][0].start if ci + 1 < len(chunks) else audio_duration
                     frame = _render_caption_line(chunk_text, width, height, caption_font_size, caption_y_pct)
