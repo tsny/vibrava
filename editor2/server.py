@@ -237,7 +237,7 @@ class Handler(BaseHTTPRequestHandler):
             jpeg = render_preview_frame(
                 image_path=(LIBRARY_PATH / image_file) if image_file else None,
                 text=s.get("text", ""),
-                caption_style=data.get("caption_style", "line"),
+                caption_style=data.get("caption_style", "chunk"),
                 overlay_path=(LIBRARY_PATH / overlay_file) if overlay_file else None,
                 overlay_size_frac=float(data.get("overlay_image_size", 1/6)),
                 resolution=(res[0], res[1]),

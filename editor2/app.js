@@ -255,7 +255,7 @@ function renderSidebar() {
 
       <label class="lbl">Caption style</label>
       <select id="ss-caption" class="inp" style="width:100%">
-        ${['word', 'line', 'none'].map(v => `<option value="${v}"${(d.caption_style || 'line') === v ? ' selected' : ''}>${v}</option>`).join('')}
+        ${['chunk', 'word', 'line', 'none'].map(v => `<option value="${v}"${(d.caption_style || 'chunk') === v ? ' selected' : ''}>${v}</option>`).join('')}
       </select>
 
       <label class="lbl">Caption font size (px, blank = auto)</label>

@@ -43,7 +43,7 @@ scripts/*.json
 
 **`vibrava/platforms/cat/matcher.py`** — `extract_tags(text)` strips stop words from sentence text, then `match(text, index)` returns the best-matching image `Path` or `None`.
 
-**`vibrava/compose/editor.py`** — `build()` assembles the final video. Each segment: blurred-background image frame + TTS audio + caption overlay, then `pause_duration` seconds of silence. Caption styles: `"line"` (full sentence shown), `"word"` (word-by-word highlight in yellow), `"none"`.
+**`vibrava/compose/editor.py`** — `build()` assembles the final video. Each segment: blurred-background image frame + TTS audio + caption overlay, then `pause_duration` seconds of silence. Caption styles: `"chunk"` (5–8 words at a time, punctuation-aware, default), `"line"` (full sentence shown), `"word"` (word-by-word highlight in yellow), `"none"`.
 
 ## Tagger (`tagger/app.py`)
 

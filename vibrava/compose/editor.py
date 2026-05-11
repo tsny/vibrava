@@ -185,6 +185,14 @@ def _build_caption_layout(
     return font, positions
 
 
+def _chunk_words(
+    words: list[WordTimestamp],
+    chunk_size: int = 5,
+) -> list[list[WordTimestamp]]:
+    """Split words into fixed-size chunks for progressive caption reveal."""
+    return [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
+
+
 def _render_caption_word(
     words: list[WordTimestamp],
     current_word_idx: int,
@@ -404,6 +412,24 @@ def build(
                         ImageClip(_render_caption_word(seg.words, i, width, height, font, positions), ismask=False)
                         .set_start(word.start)
                         .set_duration(max(end - word.start, 0.05))
+                    )
+
+        elif caption_style == "chunk":
+            if not seg.words:
+                if sentence.text.strip():
+                    caption_frame = _render_caption_line(sentence.text, width, height, caption_font_size, caption_y_pct)
+                    layers.append(ImageClip(caption_frame, ismask=False).set_duration(audio_duration))
+            else:
+                chunks = _chunk_words(seg.words)
+                for ci, chunk in enumerate(chunks):
+                    chunk_text = " ".join(w.word for w in chunk)
+                    start = chunk[0].start
+                    end = chunks[ci + 1][0].start if ci + 1 < len(chunks) else audio_duration
+                    frame = _render_caption_line(chunk_text, width, height, caption_font_size, caption_y_pct)
+                    layers.append(
+                        ImageClip(frame, ismask=False)
+                        .set_start(start)
+                        .set_duration(max(end - start, 0.05))
                     )
 
         # Per-sentence overlay — centered, alpha ramps to target by the midpoint
