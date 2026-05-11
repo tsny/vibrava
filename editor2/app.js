@@ -266,6 +266,7 @@ function renderSidebar() {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <h2 style="font-size:1em;font-weight:700;color:#ccc">Vibrava Editor</h2>
       <div style="display:flex;gap:4px">
+        <button id="tagger-btn" class="btn sec" style="padding:3px 8px;font-size:0.85em" title="Open Tagger">🏷</button>
         <button id="tts-cache-btn" class="btn sec" style="padding:3px 8px;font-size:0.85em" title="TTS Cache">🔊</button>
         <button id="settings-btn" class="btn sec" style="padding:3px 8px;font-size:0.85em" title="Settings">⚙️</button>
       </div>
@@ -547,6 +548,7 @@ function closeSettings() {
 }
 
 function bindSidebar() {
+  document.getElementById('tagger-btn')?.addEventListener('click', () => window.open('/tagger/', '_blank'));
   document.getElementById('tts-cache-btn')?.addEventListener('click', openTtsCache);
   document.getElementById('settings-btn')?.addEventListener('click', openSettings);
 

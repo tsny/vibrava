@@ -27,8 +27,41 @@ log = logging.getLogger("vibrava")
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).parent
+TAGGER2_ROOT = ROOT.parent / "tagger2"
 SCRIPTS_DIR = ROOT.parent / "scripts"
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
+
+TAGGER_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+TAGGER_VIDEO_EXTS = {".mp4", ".mov", ".avi", ".webm"}
+TAGGER_ALL_EXTS = TAGGER_IMAGE_EXTS | TAGGER_VIDEO_EXTS
+TAGGER_THUMB_SIZE = 160
+
+
+def make_thumbnail(file_path: Path, size: int = TAGGER_THUMB_SIZE) -> bytes:
+    square = Image.new("RGB", (size, size), (24, 24, 24))
+    if file_path.suffix.lower() in TAGGER_VIDEO_EXTS:
+        draw = ImageDraw.Draw(square)
+        font = _load_font(size // 4)
+        draw.text((size // 2, size // 2), "▶", fill=(180, 180, 180), anchor="mm", font=font)
+    else:
+        try:
+            img = Image.open(file_path).convert("RGB")
+            img.thumbnail((size, size))
+            offset = ((size - img.width) // 2, (size - img.height) // 2)
+            square.paste(img, offset)
+        except Exception:
+            pass
+    buf = io.BytesIO()
+    square.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
+def _tagger_validate_path(folder: str, rel: str) -> Path | None:
+    base = Path(folder).resolve()
+    target = (base / rel).resolve()
+    if str(target).startswith(str(base) + "/") or target == base:
+        return target
+    return None
 
 
 def _http_err_msg(exc: Exception) -> str:
@@ -355,6 +388,61 @@ class Handler(BaseHTTPRequestHandler):
             self._static(SFX_PATH, unquote(path[5:]))
         elif path.startswith("/cache/tts/"):
             self._static(CACHE_PATH / "tts", unquote(path[11:]))
+        elif path in ("/tagger", "/tagger/"):
+            self._file(TAGGER2_ROOT / "index.html", "text/html")
+        elif path == "/tagger/app.js":
+            self._file(TAGGER2_ROOT / "app.js", "application/javascript")
+        elif path == "/tagger/style.css":
+            self._file(TAGGER2_ROOT / "style.css", "text/css")
+        elif path == "/tagger/favicon.svg":
+            self._file(TAGGER2_ROOT / "favicon.svg", "image/svg+xml")
+        elif path == "/api/files":
+            folder = qs.get("folder", [None])[0]
+            if not folder:
+                return self._err(400, "missing folder")
+            p = Path(folder)
+            if not p.exists() or not p.is_dir():
+                return self._err(400, "not a directory")
+            files = sorted(f.name for f in p.iterdir() if f.suffix.lower() in TAGGER_ALL_EXTS)
+            self._json({"files": files, "folder": str(p.resolve())})
+        elif path == "/api/index":
+            folder = qs.get("folder", [None])[0]
+            if not folder:
+                return self._err(400, "missing folder")
+            idx = Path(folder) / "clip_index.json"
+            if idx.exists():
+                with open(idx) as f:
+                    self._json(json.load(f))
+            else:
+                self._json({"version": "1", "clips": []})
+        elif path == "/thumb":
+            folder = qs.get("folder", [None])[0]
+            rel = unquote(qs.get("file", [None])[0] or "")
+            size = int(qs.get("size", [str(TAGGER_THUMB_SIZE)])[0])
+            if not folder or not rel:
+                return self._err(400, "missing params")
+            target = _tagger_validate_path(folder, rel)
+            if not target:
+                return self._err(403, "forbidden")
+            if not target.exists():
+                return self._err(404, "not found")
+            data = make_thumbnail(target, size)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", len(data))
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
+        elif path == "/media":
+            folder = qs.get("folder", [None])[0]
+            rel = unquote(qs.get("file", [None])[0] or "")
+            if not folder or not rel:
+                return self._err(400, "missing params")
+            target = _tagger_validate_path(folder, rel)
+            if not target:
+                return self._err(403, "forbidden")
+            mime = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+            self._file(target, mime, cache=True)
         else:
             self._err(404, "not found")
 
@@ -517,6 +605,16 @@ class Handler(BaseHTTPRequestHandler):
             with open(p, "w") as f:
                 json.dump({"mode": "cat_story", "voice_id": "nPczCjzI2devNBz1zQrb", "sentences": []}, f, indent=2)
             self._json({"name": name})
+        elif path == "/api/index":
+            folder = qs.get("folder", [None])[0]
+            if not folder:
+                return self._err(400, "missing folder")
+            p = Path(folder)
+            if not p.exists() or not p.is_dir():
+                return self._err(400, "not a directory")
+            with open(p / "clip_index.json", "w") as f:
+                json.dump(body, f, indent=2)
+            self._json({"ok": True})
         else:
             self._err(404, "not found")
 
