@@ -21,6 +21,11 @@ path = "output"
 [sfx]
 path = "sfx"           # folder containing sound effect audio files
 
+[gemini]
+# api_key = ""         # or set GEMINI_API_KEY / GOOGLE_API_KEY env var
+# default_voice_name = "Aoede"   # Aoede, Charon, Fenrir, Kore, Puck, Zephyr, etc.
+# model = "gemini-2.5-flash-preview-tts"
+
 [tiktok]
 session_id = ""        # or set TIKTOK_SESSION_ID env var
 

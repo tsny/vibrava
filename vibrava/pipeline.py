@@ -8,6 +8,7 @@ from pathlib import Path
 
 from vibrava.audio import elevenlabs as tts_elevenlabs
 from vibrava.audio import fx as audio_fx
+from vibrava.audio import gemini as tts_gemini
 from vibrava.audio import tiktok as tts_tiktok
 from vibrava.audio.tts import AudioSegment
 from vibrava.clips.index import ClipIndex
@@ -139,10 +140,10 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     if script.caption_font_size is not None or script.caption_y_pct != 80.0:
         print(f"         caption_font={script.caption_font_size or 'auto'}  caption_y={script.caption_y_pct}%")
 
-    use_tiktok = script.tts_provider == "tiktok"
-    provider_name = "tiktok" if use_tiktok else "elevenlabs"
-    print(f"[tts]   provider={provider_name}")
-    if use_tiktok:
+    tts_provider = script.tts_provider
+    print(f"[tts]   provider={tts_provider}")
+    tiktok_session_id = ""
+    if tts_provider == "tiktok":
         tiktok_session_id = config.tiktok_session_id
         if not tiktok_session_id:
             raise ValueError(
@@ -150,7 +151,19 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
                 "add session_id under [tiktok] in config.toml."
             )
         voice_id = script.voice_id or os.environ.get("TIKTOK_VOICE_ID", "en_us_002")
+    elif tts_provider == "gemini":
+        if not config.gemini.api_key:
+            raise ValueError(
+                "Gemini API key is missing. Set GEMINI_API_KEY env var or "
+                "add api_key under [gemini] in config.toml."
+            )
+        voice_id = script.voice_id or config.gemini.default_voice_name
     else:
+        if not config.elevenlabs.api_key:
+            raise ValueError(
+                "ElevenLabs API key is missing. Set ELEVENLABS_API_KEY env var or "
+                "add api_key under [elevenlabs] in config.toml."
+            )
         voice_id = script.voice_id or config.elevenlabs.default_voice_id
 
     pause_duration = script.pause_duration if script.pause_duration is not None else 0.3
@@ -168,11 +181,19 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
         eff_pause = sentence.pause_duration if sentence.pause_duration is not None else pause_duration
         if not sentence.text.strip():
             seg = AudioSegment(path=None, duration=eff_pause, words=[])
-        elif use_tiktok:
+        elif tts_provider == "tiktok":
             seg = tts_tiktok.generate(
                 text=sentence.text,
                 voice_id=effective_voice_id,
                 session_id=tiktok_session_id,
+                cache_dir=cache_dir,
+            )
+        elif tts_provider == "gemini":
+            seg = tts_gemini.generate(
+                text=sentence.text,
+                voice_name=effective_voice_id,
+                model=config.gemini.model,
+                api_key=config.gemini.api_key,
                 cache_dir=cache_dir,
             )
         else:

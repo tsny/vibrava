@@ -35,7 +35,7 @@ class VideoScript:
     music_start: float = 0.0            # seconds into the video when music begins
     random_fallback: bool = False        # use a random image when no tag match found
     pause_jitter: float = 0.0            # when > 0, randomize gap to uniform(0.1, pause_jitter); max 1.0
-    tts_provider: str = "elevenlabs"    # "elevenlabs" | "tiktok"
+    tts_provider: str = "elevenlabs"    # "elevenlabs" | "tiktok" | "gemini"
     overlay_image: str | None = None    # path relative to library root; composited bottom-left over entire video
     overlay_image_size: float = 1/6    # fraction of video width (0.0–1.0)
     caption_font_size: int | None = None  # px at original resolution; None = auto (height // 26)

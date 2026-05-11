@@ -31,6 +31,41 @@ const ELEVENLABS_VOICES = [
   ['pNInz6obpgDQGcFmaJgB', 'Adam - Deep, Authoritative'],
 ];
 
+const GEMINI_VOICES = [
+  // Female
+  ['Achernar', 'Achernar'],
+  ['Aoede', 'Aoede'],
+  ['Autonoe', 'Autonoe'],
+  ['Callirrhoe', 'Callirrhoe'],
+  ['Despina', 'Despina'],
+  ['Erinome', 'Erinome'],
+  ['Gacrux', 'Gacrux'],
+  ['Kore', 'Kore'],
+  ['Laomedeia', 'Laomedeia'],
+  ['Leda', 'Leda'],
+  ['Pulcherrima', 'Pulcherrima'],
+  ['Sulafat', 'Sulafat'],
+  ['Vindemiatrix', 'Vindemiatrix'],
+  ['Zephyr', 'Zephyr'],
+  // Male
+  ['Achird', 'Achird'],
+  ['Algenib', 'Algenib'],
+  ['Algieba', 'Algieba'],
+  ['Alnilam', 'Alnilam'],
+  ['Charon', 'Charon'],
+  ['Enceladus', 'Enceladus'],
+  ['Fenrir', 'Fenrir'],
+  ['Iapetus', 'Iapetus'],
+  ['Orus', 'Orus'],
+  ['Puck', 'Puck'],
+  ['Rasalgethi', 'Rasalgethi'],
+  ['Sadachbia', 'Sadachbia'],
+  ['Sadaltager', 'Sadaltager'],
+  ['Schedar', 'Schedar'],
+  ['Umbriel', 'Umbriel'],
+  ['Zubenelgenubi', 'Zubenelgenubi'],
+];
+
 const TIKTOK_VOICES = [
   ['en_us_001', 'Female (en_us_001)'],
   ['en_us_002', 'Male (en_us_002)'],
@@ -54,6 +89,12 @@ const TIKTOK_VOICES = [
   ['en_male_grinch', 'Grinch'],
   ['en_male_jarvis', 'Jarvis'],
 ];
+
+function _voicesForProvider(provider) {
+  if (provider === 'tiktok') return TIKTOK_VOICES;
+  if (provider === 'gemini') return GEMINI_VOICES;
+  return ELEVENLABS_VOICES;
+}
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -242,13 +283,14 @@ function renderSidebar() {
       <label class="lbl">TTS Provider</label>
       <select id="ss-provider" class="inp" style="width:100%">
         <option value="elevenlabs"${(d.tts_provider || 'elevenlabs') === 'elevenlabs' ? ' selected' : ''}>elevenlabs</option>
+        <option value="gemini"${d.tts_provider === 'gemini' ? ' selected' : ''}>gemini</option>
         <option value="tiktok"${d.tts_provider === 'tiktok' ? ' selected' : ''}>tiktok</option>
       </select>
 
       <label class="lbl">Voice</label>
       <select id="ss-voiceid" class="inp" style="width:100%">
         <option value="">— default —</option>
-        ${((d.tts_provider || 'elevenlabs') === 'tiktok' ? TIKTOK_VOICES : ELEVENLABS_VOICES)
+        ${_voicesForProvider(d.tts_provider)
           .map(([id, name]) => `<option value="${esc(id)}"${d.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
       </select>
 
@@ -464,8 +506,7 @@ function bindSidebar() {
 }
 
 function updateVoiceDropdowns() {
-  const isTiktok = (S.scriptData?.tts_provider || 'elevenlabs') === 'tiktok';
-  const voices = isTiktok ? TIKTOK_VOICES : ELEVENLABS_VOICES;
+  const voices = _voicesForProvider(S.scriptData?.tts_provider);
   const defaultOpt = '<option value="">— default —</option>';
   const opts = voices.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('');
 
@@ -544,7 +585,7 @@ function sentenceRowHtml(s, i) {
             <span class="field-lbl">Voice</span>
             <select class="inp svoice" data-si="${i}" style="min-width:120px">
               <option value="">— voice default —</option>
-              ${((S.scriptData?.tts_provider || 'elevenlabs') === 'tiktok' ? TIKTOK_VOICES : ELEVENLABS_VOICES)
+              ${_voicesForProvider(S.scriptData?.tts_provider)
                 .map(([id, name]) => `<option value="${esc(id)}"${s.voice_id === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
             </select>
           </div>

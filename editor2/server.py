@@ -89,6 +89,11 @@ EL_API_KEY = os.environ.get("ELEVENLABS_API_KEY") or _EL_CFG.get("api_key", "")
 EL_MODEL_ID = _EL_CFG.get("model_id", "eleven_multilingual_v2")
 EL_DEFAULT_VOICE = _EL_CFG.get("default_voice_id", "")
 
+_GM_CFG = CONFIG.get("gemini", {})
+GM_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or _GM_CFG.get("api_key", "")
+GM_MODEL = _GM_CFG.get("model", "gemini-2.5-flash-preview-tts")
+GM_DEFAULT_VOICE = _GM_CFG.get("default_voice_name", "Aoede")
+
 _FONT_CANDIDATES = [
     "/System/Library/Fonts/Helvetica.ttc",
     "/System/Library/Fonts/Arial.ttf",
@@ -327,6 +332,50 @@ class Handler(BaseHTTPRequestHandler):
                         return self._err(500, msg)
                 else:
                     log.info("TTS  tiktok cache hit voice=%s text=%r", voice_id, text[:60])
+            elif provider == "gemini":
+                voice_name = body.get("voice_id", "").strip() or GM_DEFAULT_VOICE
+                if not GM_API_KEY:
+                    return self._err(503, "GEMINI_API_KEY not configured")
+                cache_key = hashlib.md5(f"{text}|{voice_name}|{GM_MODEL}|gemini".encode()).hexdigest()
+                audio_path = cache_dir / f"{cache_key}.wav"
+                if not audio_path.exists():
+                    log.info("TTS  gemini generating voice=%s text=%r", voice_name, text[:60])
+                    try:
+                        import wave
+                        from google import genai as _genai
+                        from google.genai import types as _gtypes
+                        client = _genai.Client(api_key=GM_API_KEY)
+                        response = client.models.generate_content(
+                            model=GM_MODEL,
+                            contents=text,
+                            config=_gtypes.GenerateContentConfig(
+                                speech_config=_gtypes.SpeechConfig(
+                                    voice_config=_gtypes.VoiceConfig(
+                                        prebuilt_voice_config=_gtypes.PrebuiltVoiceConfig(voice_name=voice_name)
+                                    )
+                                ),
+                                response_modalities=["AUDIO"],
+                            ),
+                        )
+                        usage = response.usage_metadata
+                        log.info("TTS  gemini tokens — input: %s, output: %s, total: %s", usage.prompt_token_count, usage.candidates_token_count, usage.total_token_count)
+                        candidate = response.candidates[0] if response.candidates else None
+                        if not candidate or not candidate.content or not candidate.content.parts:
+                            raise RuntimeError(f"Gemini TTS returned no audio. finish_reason={getattr(candidate, 'finish_reason', None)}, text={text!r}")
+                        raw = candidate.content.parts[0].inline_data.data
+                        pcm_bytes = raw if isinstance(raw, bytes) else base64.b64decode(raw + "=" * (-len(raw) % 4))
+                        cache_dir.mkdir(parents=True, exist_ok=True)
+                        with wave.open(str(audio_path), "wb") as wf:
+                            wf.setnchannels(1)
+                            wf.setsampwidth(2)
+                            wf.setframerate(24000)
+                            wf.writeframes(pcm_bytes)
+                    except Exception as e:
+                        msg = _http_err_msg(e)
+                        log.error("TTS  gemini failed: %s", msg)
+                        return self._err(500, msg)
+                else:
+                    log.info("TTS  gemini cache hit voice=%s text=%r", voice_name, text[:60])
             else:
                 voice_id = body.get("voice_id", "").strip() or EL_DEFAULT_VOICE
                 if not EL_API_KEY:
@@ -365,9 +414,8 @@ class Handler(BaseHTTPRequestHandler):
                     cache_dir=CACHE_PATH / "fx",
                 )
                 audio_path = seg.path
-                content_type = "audio/wav"
-            else:
-                content_type = "audio/mpeg"
+
+            content_type = "audio/wav" if audio_path.suffix == ".wav" else "audio/mpeg"
 
             audio_data = audio_path.read_bytes()
             self.send_response(200)
