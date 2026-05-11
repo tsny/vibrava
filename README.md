@@ -4,6 +4,15 @@ Short-form video generator for TikTok/Reels-style cat story content. Assembles n
 
 ## Setup
 
+**With uv (recommended):**
+
+```bash
+uv sync
+cp config.toml.example config.toml
+```
+
+**With pip:**
+
 ```bash
 pip install -e .
 cp config.toml.example config.toml
@@ -35,7 +44,7 @@ Scripts are JSON files in `scripts/`. Example (`cat_story` mode):
 {
   "mode": "cat_story",
   "voice_id": "EXAVITQu4vr4xnSDxMaL",
-  "caption_style": "word",
+  "caption_style": "chunk",
   "music": "spooky.mp3",
   "output_filename": "out.mp4",
   "resolution": [1080, 1920],
@@ -53,7 +62,15 @@ Scripts are JSON files in `scripts/`. Example (`cat_story` mode):
 }
 ```
 
-`caption_style` options: `"word"` (word-by-word highlight), `"line"` (full sentence), `"none"`.
+`caption_style` options:
+
+| Value | Description |
+|---|---|
+| `"chunk"` | 5–8 words at a time, punctuation-aware (default) |
+| `"flash"` | One word at a time |
+| `"word"` | Word-by-word highlight in yellow |
+| `"line"` | Full sentence shown at once |
+| `"none"` | No captions |
 
 Top-level `sfx_volume` (0.0–2.0, default `1.0`) sets the default volume for all sound effects. Per-sentence `sfx_volume` overrides it for that sentence.
 
@@ -63,13 +80,13 @@ The pipeline auto-selects the best available H.264 encoder at render time: `h264
 
 ## Script Editor
 
-Browse and edit scripts in a Streamlit UI. For each sentence you can edit the text and pick an image directly from the library.
+Browse and edit scripts in a web UI. For each sentence you can edit the text and pick an image directly from the library.
 
 ```bash
-streamlit run editor/app.py
+python editor2/server.py
 ```
 
-Reads `library.path` from `config.toml` automatically. Opens scripts from `scripts/`. Saves the `"image"` field on each sentence in the same format as `vibrava resolve`.
+Opens at `http://localhost:7654`. Reads `library.path` from `config.toml` automatically. Opens scripts from `scripts/`. Saves the `"image"` field on each sentence in the same format as `vibrava resolve`.
 
 ## Resolve Images (CLI)
 
@@ -84,11 +101,10 @@ vibrava resolve scripts/cat_story_example.json
 The pipeline matches sentences to images by tag overlap. Images must be tagged using the tagger UI before use.
 
 ```bash
-pip install -r tagger/requirements.txt
-streamlit run tagger/app.py
+python tagger2/server.py
 ```
 
-Set `library.path` in `config.toml` to point to a folder containing a `clip_index.json` (written by the tagger).
+Opens at `http://localhost:7655`. Set `library.path` in `config.toml` to point to a folder containing a `clip_index.json` (written by the tagger).
 
 ## Pipeline
 
