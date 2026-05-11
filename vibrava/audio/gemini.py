@@ -14,6 +14,20 @@ _SAMPLE_RATE = 24000
 _CHANNELS = 1
 _SAMPLE_WIDTH = 2  # 16-bit PCM
 
+_token_file_name = "gemini_tokens.json"
+
+
+def _record_tokens(cache_dir: Path, input_tokens: int, output_tokens: int) -> None:
+    token_file = cache_dir.parent / _token_file_name
+    try:
+        data = json.loads(token_file.read_text()) if token_file.exists() else {}
+    except Exception:
+        data = {}
+    data["input_tokens"] = data.get("input_tokens", 0) + input_tokens
+    data["output_tokens"] = data.get("output_tokens", 0) + output_tokens
+    data["calls"] = data.get("calls", 0) + 1
+    token_file.write_text(json.dumps(data))
+
 
 def _pcm_to_wav(pcm_bytes: bytes, path: Path) -> None:
     with wave.open(str(path), "wb") as wf:
@@ -57,6 +71,7 @@ def generate(
 
     usage = response.usage_metadata
     print(f"[gemini tts] tokens — input: {usage.prompt_token_count}, output: {usage.candidates_token_count}, total: {usage.total_token_count}")
+    _record_tokens(cache_dir, usage.prompt_token_count or 0, usage.candidates_token_count or 0)
 
     candidate = response.candidates[0] if response.candidates else None
     if not candidate or not candidate.content or not candidate.content.parts:

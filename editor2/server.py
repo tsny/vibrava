@@ -8,6 +8,7 @@ import logging
 import mimetypes
 import os
 import sys
+import threading
 import time
 import tomllib
 import traceback
@@ -81,8 +82,23 @@ def load_config() -> dict:
 
 CONFIG = load_config()
 LIBRARY_PATH = Path(CONFIG.get("library", {}).get("path", "res")).resolve()
+
+_token_lock = threading.Lock()
+
+
+def _record_gemini_tokens(input_tokens: int, output_tokens: int) -> None:
+    with _token_lock:
+        try:
+            data = json.loads(_GEMINI_TOKEN_FILE.read_text()) if _GEMINI_TOKEN_FILE.exists() else {}
+        except Exception:
+            data = {}
+        data["input_tokens"] = data.get("input_tokens", 0) + input_tokens
+        data["output_tokens"] = data.get("output_tokens", 0) + output_tokens
+        data["calls"] = data.get("calls", 0) + 1
+        _GEMINI_TOKEN_FILE.write_text(json.dumps(data))
 SFX_PATH = Path(CONFIG.get("sfx", {}).get("path", "sfx")).resolve()
 CACHE_PATH = Path(CONFIG.get("cache", {}).get("path", "cache")).resolve()
+_GEMINI_TOKEN_FILE = CACHE_PATH / "gemini_tokens.json"
 
 _EL_CFG = CONFIG.get("elevenlabs", {})
 EL_API_KEY = os.environ.get("ELEVENLABS_API_KEY") or _EL_CFG.get("api_key", "")
@@ -233,7 +249,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._err(400, "idx out of range")
             s = sentences[idx]
             res = data.get("resolution", [1080, 1920])
-            image_file = s.get("image")
+            images = s.get("images") or ([s["image"]] if s.get("image") else [])
+            image_file = images[0] if images else None
             overlay_file = data.get("overlay_image")
             cap_font_str = qs.get("capfont", [None])[0]
             cap_y_str = qs.get("capy", [None])[0]
@@ -280,6 +297,12 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/sfx":
             files = sorted(f.name for f in SFX_PATH.iterdir() if f.suffix.lower() in AUDIO_EXTENSIONS) if SFX_PATH.exists() else []
             self._json(files)
+        elif path == "/api/gemini-tokens":
+            if _GEMINI_TOKEN_FILE.exists():
+                with open(_GEMINI_TOKEN_FILE) as f:
+                    self._json(json.load(f))
+            else:
+                self._json({"input_tokens": 0, "output_tokens": 0, "calls": 0})
         elif path.startswith("/lib/"):
             self._static(LIBRARY_PATH, unquote(path[5:]))
         elif path.startswith("/sfx/"):
@@ -359,6 +382,7 @@ class Handler(BaseHTTPRequestHandler):
                         )
                         usage = response.usage_metadata
                         log.info("TTS  gemini tokens — input: %s, output: %s, total: %s", usage.prompt_token_count, usage.candidates_token_count, usage.total_token_count)
+                        _record_gemini_tokens(usage.prompt_token_count or 0, usage.candidates_token_count or 0)
                         candidate = response.candidates[0] if response.candidates else None
                         if not candidate or not candidate.content or not candidate.content.parts:
                             raise RuntimeError(f"Gemini TTS returned no audio. finish_reason={getattr(candidate, 'finish_reason', None)}, text={text!r}")

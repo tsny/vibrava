@@ -107,13 +107,14 @@ const S = {
   clips: [],
   sfxFiles: [],
   sel: null,        // selected sentence index
-  slot: 'image',   // 'image' | 'image2' | 'overlay_image'
+  slot: 'images:0', // 'images:N' | 'overlay_image'
   search: '',
   activeTags: new Set(),
   typeFilter: 'all',
   page: 0,
   saveStatus: '',
   density: localStorage.getItem('vibrava_density') || 'spacious',
+  geminiTokens: null, // { input_tokens, output_tokens, calls }
 };
 
 const videoCache = new Map();
@@ -286,6 +287,9 @@ function renderSidebar() {
         <option value="gemini"${d.tts_provider === 'gemini' ? ' selected' : ''}>gemini</option>
         <option value="tiktok"${d.tts_provider === 'tiktok' ? ' selected' : ''}>tiktok</option>
       </select>
+      ${S.geminiTokens ? `<div id="gemini-token-badge" style="margin-top:5px;padding:4px 8px;background:#1e2a1e;border:1px solid #3a5a3a;border-radius:4px;font-size:0.78em;color:#8bc88b">
+        Gemini tokens: ${(S.geminiTokens.input_tokens + S.geminiTokens.output_tokens).toLocaleString()} total · ${S.geminiTokens.calls} call${S.geminiTokens.calls === 1 ? '' : 's'}
+      </div>` : ''}
 
       <label class="lbl">Voice</label>
       <select id="ss-voiceid" class="inp" style="width:100%">
@@ -623,8 +627,7 @@ function sentenceRowHtml(s, i) {
         </div>
         ` : ''}
       </div>
-      ${thumbColHtml(s.image, 'image', i, isSel)}
-      ${thumbColHtml(s.image2, 'image2', i, isSel)}
+      ${imageThumbsHtml(s, i, isSel)}
       ${thumbColHtml(s.overlay_image, 'overlay_image', i, isSel)}
       <div style="display:flex;flex-direction:column;gap:4px;align-self:flex-start;margin-top:4px">
         <button class="btn sec sttsplay" data-si="${i}" title="Preview TTS" style="padding:4px 8px">🔊</button>
@@ -635,9 +638,34 @@ function sentenceRowHtml(s, i) {
   `;
 }
 
+function imageThumbsHtml(s, si, isSel) {
+  const images = s.images || [];
+  const thumbs = images.map((file, idx) => {
+    const slot = `images:${idx}`;
+    const isActive = isSel && S.slot === slot;
+    let img;
+    if (file && isVideo(file)) {
+      img = `<div class="thumb" data-video-thumb="${esc(file)}" style="width:72px;height:72px"></div>`;
+    } else if (file) {
+      img = `<img src="${libUrl(file)}" class="thumb" style="width:72px;height:72px">`;
+    } else {
+      img = `<div class="thumb thumb-empty" style="width:72px;height:72px"></div>`;
+    }
+    return `
+      <div class="sthumb" data-slot="${slot}" data-si="${si}" style="position:relative">
+        ${img}
+        <button class="btn ${isActive ? 'pri' : 'sec'} spick" data-si="${si}" data-slot="${slot}" style="width:72px;font-size:0.82em;padding:3px">${idx + 1}</button>
+        <button class="img-rm-btn" data-si="${si}" data-idx="${idx}" title="Remove image" style="position:absolute;top:0;right:0;background:#333;border:1px solid #555;color:#aaa;border-radius:3px;width:18px;height:18px;font-size:0.7em;cursor:pointer;padding:0;line-height:1">✕</button>
+      </div>`;
+  }).join('');
+  return thumbs + `
+    <div class="sthumb" style="align-self:flex-start;margin-top:4px">
+      <button class="btn sec img-add-btn" data-si="${si}" style="width:72px;height:72px;font-size:1.4em;padding:0" title="Add image">＋</button>
+    </div>`;
+}
+
 function thumbColHtml(file, slot, si, isSel) {
   const isActive = isSel && S.slot === slot;
-  const label = slot === 'image' ? '1️⃣' : slot === 'image2' ? '2️⃣' : '🔲';
   let img;
   if (file && isVideo(file)) {
     img = `<div class="thumb" data-video-thumb="${esc(file)}" style="width:72px;height:72px"></div>`;
@@ -649,7 +677,7 @@ function thumbColHtml(file, slot, si, isSel) {
   return `
     <div class="sthumb" data-slot="${slot}" data-si="${si}">
       ${img}
-      <button class="btn ${isActive ? 'pri' : 'sec'} spick" data-si="${si}" data-slot="${slot}" style="width:72px;font-size:0.82em;padding:3px">${label}</button>
+      <button class="btn ${isActive ? 'pri' : 'sec'} spick" data-si="${si}" data-slot="${slot}" style="width:72px;font-size:0.82em;padding:3px">🔲</button>
     </div>
   `;
 }
@@ -690,6 +718,8 @@ function handleSentenceClick(e) {
           sfxAudio.play().catch(err => console.warn('SFX playback failed:', err));
         }, offset);
       }
+    }).then(() => {
+      if (S.scriptData?.tts_provider === 'gemini') refreshGeminiTokens();
     }).catch(err => {
       alert('TTS failed: ' + err.message);
     }).finally(() => {
@@ -730,6 +760,42 @@ function handleSentenceClick(e) {
     if (S.sel === i) S.sel = null;
     else if (S.sel !== null && S.sel > i) S.sel--;
     renderSentences();
+    renderPicker();
+    return;
+  }
+
+  const addImg = e.target.closest('.img-add-btn');
+  if (addImg) {
+    const i = +addImg.dataset.si;
+    const s = S.scriptData.sentences[i];
+    if (!Array.isArray(s.images)) s.images = [];
+    const newIdx = s.images.length;
+    s.images.push(null);
+    S.sel = i;
+    S.slot = `images:${newIdx}`;
+    const row = document.querySelector(`.srow[data-si="${i}"]`);
+    if (row) {
+      row.outerHTML = sentenceRowHtml(s, i);
+      fillVideoThumbs(document.getElementById('sentences-panel'));
+    }
+    renderPicker();
+    return;
+  }
+
+  const rmImg = e.target.closest('.img-rm-btn');
+  if (rmImg) {
+    const i = +rmImg.dataset.si;
+    const idx = +rmImg.dataset.idx;
+    const s = S.scriptData.sentences[i];
+    s.images.splice(idx, 1);
+    if (S.sel === i && S.slot === `images:${idx}`) {
+      S.slot = s.images.length ? `images:${Math.min(idx, s.images.length - 1)}` : 'images:0';
+    }
+    const row = document.querySelector(`.srow[data-si="${i}"]`);
+    if (row) {
+      row.outerHTML = sentenceRowHtml(s, i);
+      fillVideoThumbs(document.getElementById('sentences-panel'));
+    }
     renderPicker();
     return;
   }
@@ -854,7 +920,9 @@ function renderPicker() {
 
   const noSel = S.sel === null || S.sel >= S.scriptData.sentences.length;
   const s = noSel ? null : S.scriptData.sentences[S.sel];
-  const slotLabel = S.slot === 'image' ? 'Image 1' : S.slot === 'image2' ? 'Image 2 (½ way)' : 'Overlay Image';
+  const slotLabel = S.slot === 'overlay_image'
+    ? 'Overlay Image'
+    : `Image ${parseInt(S.slot.replace('images:', '')) + 1}`;
 
   const headerHtml = noSel
     ? `<div class="panel-header"><span class="muted">Select a sentence to assign images</span>
@@ -905,11 +973,15 @@ function renderPicker() {
     </div>
   ` : `<p class="muted" style="margin-top:6px;font-size:0.8em">${clips.length} clips</p>`;
 
+  const imagesCurThumbs = noSel ? curThumb(null, 'images:0', 'Image 1') :
+    (s.images && s.images.length
+      ? s.images.map((f, idx) => curThumb(f, `images:${idx}`, `Image ${idx + 1}`)).join('')
+      : curThumb(null, 'images:0', 'Image 1'));
+
   panel.innerHTML = `
     ${headerHtml}
     <div class="cur-thumbs">
-      ${curThumb(s?.image, 'image', 'Image 1')}
-      ${curThumb(s?.image2, 'image2', 'Image 2')}
+      ${imagesCurThumbs}
       ${curThumb(s?.overlay_image, 'overlay_image', 'Overlay')}
     </div>
     <div class="hr"></div>
@@ -917,7 +989,7 @@ function renderPicker() {
     <input id="picker-search" class="inp" type="text" placeholder="tag or filename…" value="${esc(S.search)}" style="width:100%;margin-bottom:8px">
     ${typeHtml}
     ${makePager('-top')}
-    <div id="clip-grid">${clipGridHtml(clips, s?.[S.slot], noSel)}</div>
+    <div id="clip-grid">${clipGridHtml(clips, noSel ? null : S.slot === 'overlay_image' ? s?.overlay_image : (s?.images || [])[parseInt(S.slot.replace('images:', ''))] ?? null, noSel)}</div>
     ${makePager('-bot')}
   `;
 
@@ -930,7 +1002,13 @@ function refreshClipGrid() {
   if (!grid) return;
   const noSel = S.sel === null || S.sel >= (S.scriptData?.sentences?.length ?? 0);
   const clips = filteredClips();
-  const curFile = noSel ? null : S.scriptData?.sentences[S.sel]?.[S.slot];
+  const curFile = noSel ? null : (() => {
+    const s = S.scriptData?.sentences[S.sel];
+    if (!s) return null;
+    if (S.slot === 'overlay_image') return s.overlay_image ?? null;
+    const idx = parseInt(S.slot.replace('images:', ''));
+    return (s.images || [])[idx] ?? null;
+  })();
   grid.innerHTML = clipGridHtml(clips, curFile, noSel);
   fillVideoThumbs(grid);
   fillImgBlobUrls(grid);
@@ -976,19 +1054,30 @@ function handlePickerClick(e) {
   const asgn = e.target.closest('.asgn');
   if (asgn && S.sel !== null && !asgn.hasAttribute('data-disabled') && !asgn.disabled) {
     const file = asgn.dataset.file;
-    const hadOverlay = !!S.scriptData.sentences[S.sel].overlay_image;
-    S.scriptData.sentences[S.sel][S.slot] = file;
-    if (S.slot === 'overlay_image' && !hadOverlay) {
-      // Re-render the row to show the new overlay controls
-      const row = document.querySelector(`.srow[data-si="${S.sel}"]`);
-      if (row) {
-        row.outerHTML = sentenceRowHtml(S.scriptData.sentences[S.sel], S.sel);
-        fillVideoThumbs(document.getElementById('sentences-panel'));
+    const s = S.scriptData.sentences[S.sel];
+    if (S.slot === 'overlay_image') {
+      const hadOverlay = !!s.overlay_image;
+      s.overlay_image = file;
+      if (!hadOverlay) {
+        const row = document.querySelector(`.srow[data-si="${S.sel}"]`);
+        if (row) {
+          row.outerHTML = sentenceRowHtml(s, S.sel);
+          fillVideoThumbs(document.getElementById('sentences-panel'));
+        }
+      } else {
+        const thumbCol = document.querySelector(`.sthumb[data-slot="overlay_image"][data-si="${S.sel}"]`);
+        if (thumbCol) {
+          thumbCol.outerHTML = thumbColHtml(file, 'overlay_image', S.sel, true);
+          fillVideoThumbs(document.getElementById('sentences-panel'));
+        }
       }
     } else {
-      const thumbCol = document.querySelector(`.sthumb[data-slot="${S.slot}"][data-si="${S.sel}"]`);
-      if (thumbCol) {
-        thumbCol.outerHTML = thumbColHtml(file, S.slot, S.sel, true);
+      const idx = parseInt(S.slot.replace('images:', ''));
+      if (!Array.isArray(s.images)) s.images = [];
+      s.images[idx] = file;
+      const row = document.querySelector(`.srow[data-si="${S.sel}"]`);
+      if (row) {
+        row.outerHTML = sentenceRowHtml(s, S.sel);
         fillVideoThumbs(document.getElementById('sentences-panel'));
       }
     }
@@ -999,18 +1088,21 @@ function handlePickerClick(e) {
   const clr = e.target.closest('.clr-btn');
   if (clr && S.sel !== null) {
     const slot = clr.dataset.slot;
-    S.scriptData.sentences[S.sel][slot] = null;
+    const s = S.scriptData.sentences[S.sel];
     if (slot === 'overlay_image') {
-      // Re-render the row to remove the overlay controls
+      s.overlay_image = null;
       const row = document.querySelector(`.srow[data-si="${S.sel}"]`);
       if (row) {
-        row.outerHTML = sentenceRowHtml(S.scriptData.sentences[S.sel], S.sel);
+        row.outerHTML = sentenceRowHtml(s, S.sel);
         fillVideoThumbs(document.getElementById('sentences-panel'));
       }
     } else {
-      const thumbCol = document.querySelector(`.sthumb[data-slot="${slot}"][data-si="${S.sel}"]`);
-      if (thumbCol) {
-        thumbCol.outerHTML = thumbColHtml(null, slot, S.sel, true);
+      const idx = parseInt(slot.replace('images:', ''));
+      if (Array.isArray(s.images)) s.images[idx] = null;
+      const row = document.querySelector(`.srow[data-si="${S.sel}"]`);
+      if (row) {
+        row.outerHTML = sentenceRowHtml(s, S.sel);
+        fillVideoThumbs(document.getElementById('sentences-panel'));
       }
     }
     renderPicker();
@@ -1085,6 +1177,15 @@ async function loadScript(name) {
   setUrlScript(name);
   if (!Array.isArray(S.scriptData.sentences)) S.scriptData.sentences = [];
   ensureIds(S.scriptData.sentences);
+  for (const s of S.scriptData.sentences) {
+    if (!Array.isArray(s.images)) {
+      s.images = [];
+      if (s.image) s.images.push(s.image);
+      if (s.image2) s.images.push(s.image2);
+      delete s.image;
+      delete s.image2;
+    }
+  }
   S.sel = null;
   S.search = '';
   S.activeTags = new Set();
@@ -1093,6 +1194,20 @@ async function loadScript(name) {
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
+
+async function refreshGeminiTokens() {
+  try {
+    S.geminiTokens = await get('/api/gemini-tokens');
+    const badge = document.getElementById('gemini-token-badge');
+    if (badge && S.geminiTokens) {
+      const total = (S.geminiTokens.input_tokens + S.geminiTokens.output_tokens).toLocaleString();
+      const calls = S.geminiTokens.calls;
+      badge.textContent = `Gemini tokens: ${total} total · ${calls} call${calls === 1 ? '' : 's'}`;
+    } else if (!badge && S.geminiTokens) {
+      renderSidebar();
+    }
+  } catch { /* ignore if endpoint unavailable */ }
+}
 
 async function init() {
   const [cfg, scripts, clips, sfxFiles] = await Promise.all([
@@ -1106,6 +1221,7 @@ async function init() {
   S.scripts = scripts;
   S.clips = clips;
   S.sfxFiles = sfxFiles;
+  await refreshGeminiTokens();
   applyDensity();
 
   if (S.scripts.length) {
