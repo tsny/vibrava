@@ -207,16 +207,25 @@ img.thumb { display: block; }
 .clip-thumb {
   width: 100%;
   aspect-ratio: 1;
-  object-fit: cover;
   border-radius: 4px;
-  display: block;
   background: #1a1a1a;
+  overflow: hidden;
+  position: relative;
 }
-div.clip-thumb {
+
+.clip-thumb-inner {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.4em;
+}
+img.clip-thumb-inner {
+  display: block;
 }
 
 /* ── Current slot previews ──────────────────────────── */

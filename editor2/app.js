@@ -1044,9 +1044,10 @@ function clipGridHtml(clips, curFile, disabled = false) {
     const cells = pageClips.slice(i, i + COLS).map(clip => {
       const isCur = !disabled && curFile === clip.file;
       const cachedSrc = !isVideo(clip.file) && imgBlobCache.get(clip.file);
-      const thumb = isVideo(clip.file)
-        ? `<div class="clip-thumb asgn" data-video-thumb="${esc(clip.file)}" data-file="${esc(clip.file)}" ${disabled ? 'data-disabled' : ''} style="cursor:${disabled ? 'default' : 'pointer'}"></div>`
-        : `<img src="${cachedSrc || ''}" data-file="${esc(clip.file)}" loading="lazy" class="clip-thumb asgn" ${disabled ? 'data-disabled' : ''} style="cursor:${disabled ? 'default' : 'pointer'}">`;
+      const inner = isVideo(clip.file)
+        ? `<div class="clip-thumb-inner asgn" data-video-thumb="${esc(clip.file)}" data-file="${esc(clip.file)}" ${disabled ? 'data-disabled' : ''} style="cursor:${disabled ? 'default' : 'pointer'}"></div>`
+        : `<img src="${cachedSrc || ''}" data-file="${esc(clip.file)}" loading="lazy" class="clip-thumb-inner asgn" ${disabled ? 'data-disabled' : ''} style="cursor:${disabled ? 'default' : 'pointer'}">`;
+      const thumb = `<div class="clip-thumb">${inner}</div>`;
       return `<div class="clip-cell">
         ${thumb}
         <button class="btn ${isCur ? 'pri' : 'sec'} asgn" data-file="${esc(clip.file)}"
