@@ -17,6 +17,19 @@ from vibrava.platforms.cat import matcher, mood
 from vibrava.platforms.cat.story_parser import parse as parse_video_script
 
 
+def _setup_mood(config: Config) -> tuple[bool, str | None, Path]:
+    """Resolve mood provider, print status, and return (enabled, provider, cache_dir)."""
+    provider = _resolve_mood_provider()
+    enabled = provider is not None
+    cache_dir = config.cache_path / "moods"
+    if enabled:
+        model = mood.ANTHROPIC_MODEL if provider == "anthropic" else mood.GEMINI_MODEL
+        print(f"[mood]  enabled (provider={provider}, model={model})")
+    else:
+        print("[mood]  disabled (no ANTHROPIC_API_KEY or GEMINI_API_KEY)")
+    return enabled, provider, cache_dir
+
+
 def _resolve_mood_provider() -> str | None:
     """Pick a mood-inference provider, or None if no keys are set.
 
@@ -64,8 +77,8 @@ def _match_image(
             provider=mood_provider,
         )
         if inferred_moods:
-            img_path = matcher.match_with_tags(
-                sentence.text, index, mood.mood_tags(inferred_moods)
+            img_path = matcher.match(
+                sentence.text, index, extra_tags=mood.mood_tags(inferred_moods)
             )
 
     if img_path is None and random_fallback and index._clips:
@@ -147,14 +160,7 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
     sfx_map: dict[str, tuple[Path, float, float | None, float] | None] = {}
     sentence_overlay_map: dict[str, tuple[Path, float, float] | None] = {}
 
-    mood_provider = _resolve_mood_provider()
-    mood_enabled = mood_provider is not None
-    mood_cache_dir = config.cache_path / "moods"
-    if mood_enabled:
-        model = mood.ANTHROPIC_MODEL if mood_provider == "anthropic" else mood.GEMINI_MODEL
-        print(f"[mood]  enabled (provider={mood_provider}, model={model})")
-    else:
-        print("[mood]  disabled (no ANTHROPIC_API_KEY or GEMINI_API_KEY)")
+    mood_enabled, mood_provider, mood_cache_dir = _setup_mood(config)
 
     total = len(script.sentences)
     for i, sentence in enumerate(script.sentences, 1):
@@ -298,14 +304,7 @@ def _resolve_video_script(script_path: Path, config: Config) -> None:
     script = parse_video_script(script_path)
     index = ClipIndex.load(config.library_path / "clip_index.json")
 
-    mood_provider = _resolve_mood_provider()
-    mood_enabled = mood_provider is not None
-    mood_cache_dir = config.cache_path / "moods"
-    if mood_enabled:
-        model = mood.ANTHROPIC_MODEL if mood_provider == "anthropic" else mood.GEMINI_MODEL
-        print(f"[mood]  enabled (provider={mood_provider}, model={model})")
-    else:
-        print("[mood]  disabled (no ANTHROPIC_API_KEY or GEMINI_API_KEY)")
+    mood_enabled, mood_provider, mood_cache_dir = _setup_mood(config)
 
     resolved_images: list[str | None] = []
     for sentence in script.sentences:

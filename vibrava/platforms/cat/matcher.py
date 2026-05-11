@@ -64,7 +64,6 @@ WORD_TAG_MAP: dict[str, list[str]] = {
     "water": ["water", "drinking", "bowl", "thirsty"],
     "thirsty": ["thirsty", "drinking", "water", "bowl"],
     "kibble": ["kibble", "food", "eating", "bowl"],
-    "fish": ["fish", "food", "eating", "hunting"],
     "chicken": ["chicken", "food", "eating", "hungry"],
     "tuna": ["tuna", "food", "eating", "treat"],
     "bite": ["eating", "food", "biting", "hungry"],
@@ -116,6 +115,7 @@ WORD_TAG_MAP: dict[str, list[str]] = {
     "escaping": ["escape", "running", "hiding", "sneaky"],
     "escaped": ["escape", "running", "hiding", "sneaky"],
     "slip": ["sneaky", "escape", "fast", "floor"],
+
     "slipping": ["sneaky", "escape", "fast", "floor"],
     "slipped": ["sneaky", "escape", "fast", "floor"],
     # ------------------------------------------------------------------ #
@@ -304,7 +304,6 @@ WORD_TAG_MAP: dict[str, list[str]] = {
     "bored": ["bored", "sitting", "staring", "tired"],
     "curious": ["curious", "watching", "alert", "sniffing"],
     "confused": ["confused", "head-tilt", "curious", "alert"],
-    "chaos": ["zoomies", "running", "playful", "energetic"],
     "victory": ["smug", "winning", "calm", "sitting"],
     "winning": ["smug", "winning", "calm"],
     "defeated": ["sad", "hiding", "quiet", "floor"],
@@ -346,7 +345,6 @@ WORD_TAG_MAP: dict[str, list[str]] = {
     "trill": ["trilling", "happy", "vocal", "friendly"],
     "trilling": ["trilling", "happy", "vocal", "friendly"],
     "silent": ["quiet", "hiding", "sneaky", "calm"],
-    "quiet": ["quiet", "calm", "sneaky", "hiding"],
     # ------------------------------------------------------------------ #
     # body parts / physical                                                #
     # ------------------------------------------------------------------ #
@@ -386,7 +384,7 @@ WORD_TAG_MAP: dict[str, list[str]] = {
     "fly": ["bug", "hunting", "jumping", "curious"],
     "spider": ["bug", "hunting", "curious", "scared"],
     "butterfly": ["butterfly", "outside", "hunting", "curious"],
-    "fish": ["fish", "food", "water", "watching"],
+    "fish": ["fish", "food", "eating", "hunting", "water", "watching"],
     # ------------------------------------------------------------------ #
     # time / environment                                                   #
     # ------------------------------------------------------------------ #
@@ -406,7 +404,7 @@ WORD_TAG_MAP: dict[str, list[str]] = {
     "dark": ["dark", "night", "sneaky", "hiding"],
     "darkness": ["dark", "night", "sneaky", "hiding"],
     "quiet": ["quiet", "calm", "sneaky", "hiding"],
-    "chaos": ["chaos", "zoomies", "running", "energetic"],
+    "chaos": ["chaos", "zoomies", "running", "playful", "energetic"],
     # ------------------------------------------------------------------ #
     # actions / verbs (misc)                                               #
     # ------------------------------------------------------------------ #
@@ -457,8 +455,6 @@ WORD_TAG_MAP: dict[str, list[str]] = {
     "explore": ["exploring", "curious", "sniffing", "walking"],
     "exploring": ["exploring", "curious", "sniffing", "walking"],
     "explored": ["exploring", "curious", "sniffing", "walking"],
-    "escape": ["escape", "running", "hiding", "sneaky"],
-    "escaped": ["escape", "running", "hiding", "sneaky"],
     "vanish": ["hiding", "sneaky", "escape", "fast"],
     "vanished": ["hiding", "sneaky", "escape", "fast"],
     "disappear": ["hiding", "sneaky", "escape", "fast"],
@@ -475,7 +471,6 @@ WORD_TAG_MAP: dict[str, list[str]] = {
     "survived": ["winning", "smug", "calm", "escape"],
     "suffer": ["dramatic", "sad", "upset", "flopped"],
     "suffering": ["dramatic", "sad", "upset", "flopped"],
-    "suffer": ["dramatic", "sad", "upset", "flopped"],
     "tolerate": ["smug", "unbothered", "calm", "grumpy"],
     "tolerating": ["smug", "unbothered", "calm", "grumpy"],
     "tolerated": ["smug", "unbothered", "calm", "grumpy"],
@@ -506,26 +501,18 @@ def expand_tags(words: list[str]) -> list[str]:
     return result
 
 
-def match(text: str, index: ClipIndex) -> Path | None:
-    tags = expand_tags(extract_tags(text))
-    results = index.find_by_tags(tags)
-    if not results:
-        return None
-    return index.resolve_path(results[0])
-
-
-def match_with_tags(
+def match(
     text: str,
     index: ClipIndex,
-    extra_tags: list[str],
+    extra_tags: list[str] | None = None,
 ) -> Path | None:
-    """Same as ``match`` but folds *extra_tags* in alongside the word-derived tags."""
     tags = expand_tags(extract_tags(text))
-    seen = set(tags)
-    for t in extra_tags:
-        if t not in seen:
-            seen.add(t)
-            tags.append(t)
+    if extra_tags:
+        seen = set(tags)
+        for t in extra_tags:
+            if t not in seen:
+                seen.add(t)
+                tags.append(t)
     results = index.find_by_tags(tags)
     if not results:
         return None

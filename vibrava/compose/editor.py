@@ -425,12 +425,13 @@ def build(
                         .set_duration(max(end - word.start, 0.05))
                     )
 
-        elif caption_style == "chunk":
+        elif caption_style in ("chunk", "flash"):
             if not seg.words and sentence.text.strip():
-                print(f"  [warn] {sentence.id}: no word timestamps — using estimated timing for chunk captions")
+                print(f"  [warn] {sentence.id}: no word timestamps — using estimated timing for {caption_style} captions")
             words = seg.words or _estimate_word_timestamps(sentence.text, audio_duration)
             if words:
-                chunks = _chunk_words(words)
+                chunk_size = 1 if caption_style == "flash" else 5
+                chunks = _chunk_words(words, chunk_size)
                 for ci, chunk in enumerate(chunks):
                     chunk_text = " ".join(w.word for w in chunk)
                     start = max(chunk[0].start + caption_offset, 0.0)
@@ -441,20 +442,6 @@ def build(
                         .set_start(start)
                         .set_duration(max(end - chunk[0].start, 0.05))
                     )
-
-        elif caption_style == "flash":
-            if not seg.words and sentence.text.strip():
-                print(f"  [warn] {sentence.id}: no word timestamps — using estimated timing for flash captions")
-            words = seg.words or _estimate_word_timestamps(sentence.text, audio_duration)
-            for i, word in enumerate(words):
-                end = words[i + 1].start if i + 1 < len(words) else audio_duration
-                t = max(word.start + caption_offset, 0.0)
-                frame = _render_caption_line(word.word, width, height, caption_font_size, caption_y_pct)
-                layers.append(
-                    ImageClip(frame, ismask=False)
-                    .set_start(t)
-                    .set_duration(max(end - word.start, 0.05))
-                )
 
         # Per-sentence overlay — centered, alpha ramps to target by the midpoint
         ov_entry = (sentence_overlay_map or {}).get(sentence.id)
