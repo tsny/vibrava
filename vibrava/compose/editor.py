@@ -363,8 +363,6 @@ def build(
     for sentence in tqdm(sentences, desc="building clips", unit="clip"):
         seg = audio_map[sentence.id]
         images = image_map.get(sentence.id) or [None]
-        img_path = images[0] if images else None
-        img2_path = images[1] if len(images) > 1 else None
         if sentence.pause_duration is not None:
             gap = sentence.pause_duration
         elif pause_jitter > 0:
@@ -382,14 +380,17 @@ def build(
             audio_duration = audio_clip.duration
         total_duration = audio_duration + gap
 
-        # Base video: split at halfway point when a second image is provided
-        if img2_path:
-            half = audio_duration / 2
-            clip1 = _make_image_clip(img_path, width, height, half)
-            clip2 = _make_image_clip(img2_path, width, height, total_duration - half)
-            video_clip = concatenate_videoclips([clip1, clip2], method="compose")
+        # Base video: distribute N images evenly across the sentence
+        n = len(images)
+        if n > 1:
+            slice_dur = audio_duration / n
+            img_clips = [
+                _make_image_clip(images[i], width, height, slice_dur if i < n - 1 else slice_dur + gap)
+                for i in range(n)
+            ]
+            video_clip = concatenate_videoclips(img_clips, method="compose")
         else:
-            video_clip = _make_image_clip(img_path, width, height, total_duration)
+            video_clip = _make_image_clip(images[0] if images else None, width, height, total_duration)
 
         sfx_entry = (sfx_map or {}).get(sentence.id)
         if sfx_entry:

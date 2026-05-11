@@ -11,8 +11,8 @@ class Sentence:
     sfx_offset: float = 0.0       # seconds from start of sentence when sfx plays
     sfx_duration: float | None = None  # seconds to play; None = play to end
     sfx_volume: float | None = None    # 0.0–2.0; None = use script-level sfx_volume
-    image: str | None = None   # relative path from library root; skips matching when set
-    image2: str | None = None  # shown at the halfway point of the sentence
+    images: list[str] = field(default_factory=list)  # ordered relative paths; empty = auto-match
+    num_images: int | None = None  # override images_per_sentence for this sentence
     voice_id: str | None = None  # overrides top-level voice_id when set
     pause_duration: float | None = None  # overrides script/config pause when set
     overlay_image: str | None = None   # per-sentence overlay image (relative to library root)
@@ -44,6 +44,7 @@ class VideoScript:
     speed: float = 1.0                    # playback speed multiplier applied to all sentences
     sfx_volume: float = 1.0              # default SFX volume multiplier (0.0–2.0)
     caption_offset: float = 0.0          # seconds to shift timed captions (negative = show earlier)
+    images_per_sentence: int = 1         # how many auto-matched images to cycle per sentence
 
 
 def _next_sentence_id(raw_sentences: list[dict]) -> str:
@@ -57,6 +58,18 @@ def _next_sentence_id(raw_sentences: list[dict]) -> str:
     while f"s{next_num}" in used:
         next_num += 1
     return f"s{next_num}"
+
+
+def _parse_images(s: dict) -> list[str]:
+    """Read the images list, with backward compat for legacy image/image2 keys."""
+    if "images" in s:
+        return [str(p) for p in s["images"] if p]
+    result = []
+    if s.get("image"):
+        result.append(str(s["image"]))
+    if s.get("image2"):
+        result.append(str(s["image2"]))
+    return result
 
 
 def _ensure_sentence_ids(raw_sentences: list[dict]):
@@ -81,8 +94,8 @@ def parse(path: Path) -> VideoScript:
             sfx_offset=float(s.get("sfx_offset", 0.0)),
             sfx_duration=float(s["sfx_duration"]) if s.get("sfx_duration") is not None else None,
             sfx_volume=float(s["sfx_volume"]) if s.get("sfx_volume") is not None else None,
-            image=s.get("image"),
-            image2=s.get("image2"),
+            images=_parse_images(s),
+            num_images=int(s["num_images"]) if s.get("num_images") is not None else None,
             voice_id=s.get("voice_id") or None,
             pause_duration=float(s["pause_duration"]) if s.get("pause_duration") is not None else None,
             overlay_image=s.get("overlay_image"),
@@ -116,4 +129,5 @@ def parse(path: Path) -> VideoScript:
         speed=float(data.get("speed", 1.0)),
         sfx_volume=float(data.get("sfx_volume", 1.0)),
         caption_offset=float(data.get("caption_offset", 0.0)),
+        images_per_sentence=int(data.get("images_per_sentence", 1)),
     )

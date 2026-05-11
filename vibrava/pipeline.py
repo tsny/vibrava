@@ -52,6 +52,53 @@ def _resolve_mood_provider() -> str | None:
     return None
 
 
+def _match_images(
+    sentence,
+    index: ClipIndex,
+    random_fallback: bool,
+    mood_enabled: bool,
+    mood_provider: str | None,
+    mood_cache_dir: Path,
+    n: int = 1,
+) -> tuple[list[Path | None], list[str], str]:
+    """Resolve n images for a sentence.
+
+    Returns (img_paths, inferred_moods, label).
+    """
+    if sentence.images:
+        paths = [index.library_dir / img for img in sentence.images]
+        label = ", ".join(p.name for p in paths)
+        return paths, [], f"{label} (pinned)"
+
+    inferred_moods: list[str] = []
+    extra_tags: list[str] | None = None
+
+    paths = matcher.match_many(sentence.text, index, n=n)
+
+    if len(paths) < n and mood_enabled and mood_provider:
+        inferred_moods = _infer_moods_with_retry(
+            sentence.text,
+            cache_dir=mood_cache_dir,
+            provider=mood_provider,
+        )
+        if inferred_moods:
+            extra_tags = mood.mood_tags(inferred_moods)
+            paths = matcher.match_many(sentence.text, index, n=n, extra_tags=extra_tags)
+
+    if not paths and random_fallback and index._clips:
+        paths = [index.resolve_path(random.choice(index._clips)) for _ in range(n)]
+        label = ", ".join(p.name for p in paths) + " (random)"
+        return paths, inferred_moods, label
+
+    while len(paths) < n:
+        paths.append(paths[-1] if paths else None)
+
+    label = paths[0].name if paths and paths[0] else "no match"
+    if n > 1 and paths:
+        label += f" +{n - 1} more"
+    return paths, inferred_moods, label
+
+
 def _match_image(
     sentence,
     index: ClipIndex,
@@ -60,35 +107,10 @@ def _match_image(
     mood_provider: str | None,
     mood_cache_dir: Path,
 ) -> tuple[Path | None, list[str], str]:
-    """Resolve the primary image for a sentence.
-
-    Returns (img_path, inferred_moods, label).  img_path is None when no
-    match is found and random_fallback is disabled.
-    """
-    if sentence.image:
-        return index.library_dir / sentence.image, [], f"{Path(sentence.image).name} (pinned)"
-
-    img_path = matcher.match(sentence.text, index)
-    inferred_moods: list[str] = []
-
-    if img_path is None and mood_enabled and mood_provider:
-        inferred_moods = _infer_moods_with_retry(
-            sentence.text,
-            cache_dir=mood_cache_dir,
-            provider=mood_provider,
-        )
-        if inferred_moods:
-            img_path = matcher.match(
-                sentence.text, index, extra_tags=mood.mood_tags(inferred_moods)
-            )
-
-    if img_path is None and random_fallback and index._clips:
-        entry = random.choice(index._clips)
-        img_path = index.resolve_path(entry)
-        return img_path, inferred_moods, f"{img_path.name} (random)"
-
-    label = img_path.name if img_path else "no match"
-    return img_path, inferred_moods, label
+    paths, moods, label = _match_images(
+        sentence, index, random_fallback, mood_enabled, mood_provider, mood_cache_dir, n=1
+    )
+    return paths[0] if paths else None, moods, label
 
 
 def _infer_moods_with_retry(
@@ -215,13 +237,12 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
             )
         audio_map[sentence.id] = seg
 
-        img_path, inferred_moods, label = _match_image(
+        eff_n = sentence.num_images if sentence.num_images is not None else script.images_per_sentence
+        img_paths, inferred_moods, label = _match_images(
             sentence, index, script.random_fallback,
-            mood_enabled, mood_provider, mood_cache_dir,
+            mood_enabled, mood_provider, mood_cache_dir, n=eff_n,
         )
-
-        img2_path = (index.library_dir / sentence.image2) if sentence.image2 else None
-        image_map[sentence.id] = [img_path, img2_path]
+        image_map[sentence.id] = img_paths
 
         sfx_label: str | None = None
         if sentence.sound_effect:
@@ -247,8 +268,6 @@ def _run_video_script(script_path: Path, config: Config, output_path: Path | Non
         print(tts_line)
 
         match_line = f"        match  {label}"
-        if img2_path:
-            match_line += f" + {img2_path.name}"
         print(match_line)
 
         if inferred_moods:

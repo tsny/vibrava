@@ -506,6 +506,16 @@ def match(
     index: ClipIndex,
     extra_tags: list[str] | None = None,
 ) -> Path | None:
+    results = match_many(text, index, n=1, extra_tags=extra_tags)
+    return results[0] if results else None
+
+
+def match_many(
+    text: str,
+    index: ClipIndex,
+    n: int = 1,
+    extra_tags: list[str] | None = None,
+) -> list[Path]:
     tags = expand_tags(extract_tags(text))
     if extra_tags:
         seen = set(tags)
@@ -514,6 +524,4 @@ def match(
                 seen.add(t)
                 tags.append(t)
     results = index.find_by_tags(tags)
-    if not results:
-        return None
-    return index.resolve_path(results[0])
+    return [index.resolve_path(r) for r in results[:n]]
