@@ -135,6 +135,10 @@ def _infer_moods_with_retry(
 def _run_video_script(script_path: Path, config: Config, output_path: Path | None = None) -> None:
     script = parse_video_script(script_path)
 
+    for i, s in enumerate(script.sentences):
+        if not (s.text or "").strip() and not s.sound_effect and not s.pause_duration:
+            raise SystemExit(f"[error] sentence {i + 1} is empty (no text, sfx, or pause)")
+
     index = ClipIndex.load(config.library_path / "clip_index.json")
     cache_dir = config.cache_path / "tts"
 

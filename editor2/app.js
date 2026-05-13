@@ -120,6 +120,7 @@ const S = {
 
 const videoCache = new Map();
 const imgBlobCache = new Map(); // file → blob URL
+const sfxDurationCache = new Map(); // sfx filename → duration in seconds
 const sfxAudio = new Audio();
 const ttsAudio = new Audio();
 let sfxPreviewTimeout = null;
@@ -210,6 +211,25 @@ async function getImgBlobUrl(file) {
     imgBlobCache.set(file, url);
     return url;
   } catch { return null; }
+}
+
+function fillSfxDurations(container) {
+  const spans = [...container.querySelectorAll('span[data-sfx-dur]')];
+  for (const span of spans) {
+    const file = span.dataset.sfxDur;
+    if (sfxDurationCache.has(file)) {
+      span.textContent = sfxDurationCache.get(file);
+      continue;
+    }
+    const audio = new Audio(sfxUrl(file));
+    audio.addEventListener('loadedmetadata', () => {
+      const dur = audio.duration;
+      if (!isFinite(dur)) return;
+      const label = dur >= 60 ? `${(dur / 60).toFixed(1)}m` : `${dur.toFixed(1)}s`;
+      sfxDurationCache.set(file, label);
+      span.textContent = label;
+    }, { once: true });
+  }
 }
 
 async function fillImgBlobUrls(container) {
@@ -690,6 +710,7 @@ function renderSentences() {
     <button id="add-sent-btn" class="btn sec" style="width:100%;margin-top:8px">＋ Add sentence</button>
   `;
   fillVideoThumbs(panel);
+  fillSfxDurations(panel);
 }
 
 function sentenceRowHtml(s, i) {
@@ -711,6 +732,7 @@ function sentenceRowHtml(s, i) {
                 <select class="inp ssfx" data-si="${i}" style="flex:1;min-width:80px">
                   ${sfxOpts.map(f => `<option value="${esc(f)}"${curSfx === f ? ' selected' : ''}>${esc(f)}</option>`).join('')}
                 </select>
+                ${s.sound_effect ? `<span class="muted" data-sfx-dur="${esc(s.sound_effect)}" style="font-size:0.8em;align-self:center;white-space:nowrap">…</span>` : ''}
                 ${s.sound_effect ? `<button class="btn sec ssfxplay" data-si="${i}" title="Play sound effect" style="padding:5px 8px;flex-shrink:0">▶</button>` : ''}
               </div>
             </div>
@@ -928,6 +950,7 @@ function handleSentenceClick(e) {
     if (row) {
       row.outerHTML = sentenceRowHtml(s, i);
       fillVideoThumbs(document.getElementById('sentences-panel'));
+      fillSfxDurations(document.getElementById('sentences-panel'));
     }
     renderPicker();
     return;
@@ -946,6 +969,7 @@ function handleSentenceClick(e) {
     if (row) {
       row.outerHTML = sentenceRowHtml(s, i);
       fillVideoThumbs(document.getElementById('sentences-panel'));
+      fillSfxDurations(document.getElementById('sentences-panel'));
     }
     renderPicker();
     return;
@@ -1026,6 +1050,7 @@ function handleSentenceChange(e) {
     if (row) {
       row.outerHTML = sentenceRowHtml(s, i);
       fillVideoThumbs(document.getElementById('sentences-panel'));
+      fillSfxDurations(document.getElementById('sentences-panel'));
     }
   }
 }
@@ -1117,13 +1142,13 @@ function renderPicker() {
   const page = Math.min(S.page, totalPages - 1);
   S.page = page;
 
-  const makePager = (suffix) => totalPages > 1 ? `
+  const makePager = (suffix) => `
     <div class="pager">
       <button class="btn sec" id="pgprev${suffix}" ${page === 0 ? 'disabled' : ''}>← Prev</button>
       <span>Page ${page + 1} / ${totalPages} · ${clips.length} clips</span>
       <button class="btn sec" id="pgnext${suffix}" ${page >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
     </div>
-  ` : `<p class="muted" style="margin-top:6px;font-size:0.8em">${clips.length} clips</p>`;
+  `;
 
   const imagesCurThumbs = noSel ? curThumb(null, 'images:0', 'Image 1') :
     (s.images && s.images.length
@@ -1215,12 +1240,14 @@ function handlePickerClick(e) {
         if (row) {
           row.outerHTML = sentenceRowHtml(s, S.sel);
           fillVideoThumbs(document.getElementById('sentences-panel'));
+      fillSfxDurations(document.getElementById('sentences-panel'));
         }
       } else {
         const thumbCol = document.querySelector(`.sthumb[data-slot="overlay_image"][data-si="${S.sel}"]`);
         if (thumbCol) {
           thumbCol.outerHTML = thumbColHtml(file, 'overlay_image', S.sel, true);
           fillVideoThumbs(document.getElementById('sentences-panel'));
+      fillSfxDurations(document.getElementById('sentences-panel'));
         }
       }
     } else {
@@ -1231,6 +1258,7 @@ function handlePickerClick(e) {
       if (row) {
         row.outerHTML = sentenceRowHtml(s, S.sel);
         fillVideoThumbs(document.getElementById('sentences-panel'));
+      fillSfxDurations(document.getElementById('sentences-panel'));
       }
     }
     renderPicker();
@@ -1247,6 +1275,7 @@ function handlePickerClick(e) {
       if (row) {
         row.outerHTML = sentenceRowHtml(s, S.sel);
         fillVideoThumbs(document.getElementById('sentences-panel'));
+      fillSfxDurations(document.getElementById('sentences-panel'));
       }
     } else {
       const idx = parseInt(slot.replace('images:', ''));
@@ -1255,6 +1284,7 @@ function handlePickerClick(e) {
       if (row) {
         row.outerHTML = sentenceRowHtml(s, S.sel);
         fillVideoThumbs(document.getElementById('sentences-panel'));
+      fillSfxDurations(document.getElementById('sentences-panel'));
       }
     }
     renderPicker();
