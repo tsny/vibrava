@@ -199,12 +199,23 @@ def _estimate_word_timestamps(text: str, duration: float) -> list[WordTimestamp]
     return [WordTimestamp(w, i * dt, (i + 1) * dt) for i, w in enumerate(words)]
 
 
+_CHUNK_BREAK = re.compile(r"[,!…]$|\.{2,}$")
+
 def _chunk_words(
     words: list[WordTimestamp],
     chunk_size: int = 5,
 ) -> list[list[WordTimestamp]]:
-    """Split words into fixed-size chunks for progressive caption reveal."""
-    return [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
+    """Split words into chunks, breaking on punctuation or fixed size."""
+    chunks: list[list[WordTimestamp]] = []
+    current: list[WordTimestamp] = []
+    for w in words:
+        current.append(w)
+        if _CHUNK_BREAK.search(w.word) or len(current) >= chunk_size:
+            chunks.append(current)
+            current = []
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 def _render_caption_word(

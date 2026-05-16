@@ -154,9 +154,15 @@ const sfxUrl = f => `/sfx/${f.split('/').map(encodeURIComponent).join('/')}`;
 const isVideo = f => VIDEO_EXTS.has(ext(f));
 
 function estimateDuration(text) {
-  const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
-  if (!words) return null;
-  return (words / 2.5).toFixed(1);
+  const t = (text || '').trim();
+  if (!t) return null;
+  // Character-based rate (~15 chars/sec ≈ 150 WPM at avg word length)
+  // captures variance between short and long words better than word count alone
+  const chars = t.length;
+  const commas = (t.match(/[,;]/g) || []).length;
+  const stops  = (t.match(/[.!?…]/g) || []).length;
+  const seconds = chars / 15 + commas * 0.12 + stops * 0.25;
+  return seconds.toFixed(1);
 }
 
 function nextId(sentences) {

@@ -28,6 +28,7 @@ const S = {
   page: 0,
   filterImages: true,
   filterVideos: true,
+  filterUntagged: false,
   search: '',
 };
 
@@ -123,13 +124,18 @@ function allTagCounts() {
 
 // ─── Filtered files ───────────────────────────────────────────────────────────
 
+function isUntagged(f) {
+  const c = getClip(f);
+  return !c || !c.tags || c.tags.length === 0;
+}
+
 function filteredFiles() {
-  const isUntagged = f => { const c = getClip(f); return !c || !c.tags || c.tags.length === 0; };
   return S.files.filter(f => {
     const isImg = IMAGE_EXTS.has(ext(f));
     const isVid = VIDEO_EXTS.has(ext(f));
     if (isImg && !S.filterImages) return false;
     if (isVid && !S.filterVideos) return false;
+    if (S.filterUntagged && !isUntagged(f)) return false;
     if (S.search) {
       const needle = S.search.toLowerCase();
       const clip = getClip(f);
@@ -138,6 +144,20 @@ function filteredFiles() {
     }
     return true;
   }).sort((a, b) => isUntagged(b) - isUntagged(a));
+}
+
+function findNextUntaggedIdx(from) {
+  for (let i = from + 1; i < S.files.length; i++) {
+    if (isUntagged(S.files[i])) return i;
+  }
+  return -1;
+}
+
+function findPrevUntaggedIdx(from) {
+  for (let i = from - 1; i >= 0; i--) {
+    if (isUntagged(S.files[i])) return i;
+  }
+  return -1;
 }
 
 // ─── Folder loading ───────────────────────────────────────────────────────────
@@ -282,6 +302,7 @@ function renderGallery() {
       <div class="filters">
         <label><input type="checkbox" id="fi-images" ${S.filterImages ? 'checked' : ''}> Images</label>
         <label><input type="checkbox" id="fi-videos" ${S.filterVideos ? 'checked' : ''}> Videos</label>
+        <label><input type="checkbox" id="fi-untagged" ${S.filterUntagged ? 'checked' : ''}> Untagged only</label>
       </div>
       <input class="inp" id="gallery-search" type="text" placeholder="search filename or tag…"
         value="${esc(S.search)}" style="width:220px">
@@ -296,6 +317,9 @@ function renderGallery() {
   });
   document.getElementById('fi-videos').addEventListener('change', e => {
     S.filterVideos = e.target.checked; S.page = 0; refreshGalleryGrid();
+  });
+  document.getElementById('fi-untagged').addEventListener('change', e => {
+    S.filterUntagged = e.target.checked; S.page = 0; refreshGalleryGrid();
   });
   document.getElementById('gallery-search').addEventListener('input', e => {
     const pos = e.target.selectionStart;
@@ -325,8 +349,14 @@ function renderDetail() {
 
   const tags = currentTags();
   const existing = new Set(tags);
-  const total = S.files.length;
   const idx = S.currentIdx;
+
+  const prevIdx = S.filterUntagged ? findPrevUntaggedIdx(idx) : idx - 1;
+  const nextIdx = S.filterUntagged ? findNextUntaggedIdx(idx) : idx + 1;
+  const untaggedTotal = S.filterUntagged ? S.files.filter(isUntagged).length : S.files.length;
+  const navInfo = S.filterUntagged
+    ? `<strong>${esc(file)}</strong> &nbsp;·&nbsp; ${untaggedTotal} untagged`
+    : `<strong>${esc(file)}</strong> &nbsp;·&nbsp; ${idx + 1} / ${S.files.length}`;
 
   const mediaHtml = isVideo(file)
     ? `<video src="${esc(mediaUrl(file))}" controls loop muted style="border-radius:6px;width:100%"></video>`
@@ -342,9 +372,9 @@ function renderDetail() {
 
   document.getElementById('main').innerHTML = `
     <div class="detail-nav">
-      <button class="btn sec" id="nav-prev" ${idx === 0 ? 'disabled' : ''}>← Prev</button>
-      <div class="nav-info"><strong>${esc(file)}</strong> &nbsp;·&nbsp; ${idx + 1} / ${total}</div>
-      <button class="btn sec" id="nav-next" ${idx >= total - 1 ? 'disabled' : ''}>Next →</button>
+      <button class="btn sec" id="nav-prev" ${prevIdx < 0 ? 'disabled' : ''}>← Prev</button>
+      <div class="nav-info">${navInfo}</div>
+      <button class="btn sec" id="nav-next" ${nextIdx < 0 ? 'disabled' : ''}>Next →</button>
     </div>
     <div class="detail-layout">
       <div class="detail-media">${mediaHtml}</div>
@@ -366,10 +396,10 @@ function renderDetail() {
 
   // Nav
   document.getElementById('nav-prev').addEventListener('click', () => {
-    S.currentIdx--; renderDetail();
+    if (prevIdx >= 0) { S.currentIdx = prevIdx; renderDetail(); renderSidebar(); }
   });
   document.getElementById('nav-next').addEventListener('click', () => {
-    S.currentIdx++; renderDetail();
+    if (nextIdx >= 0) { S.currentIdx = nextIdx; renderDetail(); renderSidebar(); }
   });
 
   // Remove tag chip
@@ -460,9 +490,11 @@ document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (S.view === 'detail') {
     if (e.key === 'j' || e.key === 'ArrowRight') {
-      if (S.currentIdx < S.files.length - 1) { S.currentIdx++; renderDetail(); renderSidebar(); }
+      const next = S.filterUntagged ? findNextUntaggedIdx(S.currentIdx) : S.currentIdx + 1;
+      if (next >= 0 && next < S.files.length) { S.currentIdx = next; renderDetail(); renderSidebar(); }
     } else if (e.key === 'k' || e.key === 'ArrowLeft') {
-      if (S.currentIdx > 0) { S.currentIdx--; renderDetail(); renderSidebar(); }
+      const prev = S.filterUntagged ? findPrevUntaggedIdx(S.currentIdx) : S.currentIdx - 1;
+      if (prev >= 0) { S.currentIdx = prev; renderDetail(); renderSidebar(); }
     } else if (e.key === 'Escape') {
       S.view = 'gallery'; render();
     }
